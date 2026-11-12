@@ -35,6 +35,7 @@ struct FlowEvent: Identifiable, Codable {
     var outcome: Outcome
     var category: String? = nil
     var subtasks: [FlowSubtask]? = nil
+    var favorite: Bool? = nil
 }
 struct FlowData: Codable {
     static let currentSchema = 5
@@ -211,14 +212,44 @@ enum FlowSearch {
 }
 extension FlowData {
     mutating func record(_ task: FlowTask, outcome: Outcome, now: Date) {
-        history.append(FlowEvent(taskID: task.id, title: task.title, day: task.day, recordedAt: now, outcome: outcome, category: FlowCategories.normalized(task.category), subtasks: task.subtasks))
+        history.append(FlowEvent(taskID: task.id, title: task.title, day: task.day, recordedAt: now, outcome: outcome, category: FlowCategories.normalized(task.category), subtasks: task.subtasks, favorite: outcome == .completed && task.favorite ? true : nil))
     }
-    mutating func resolve(_ id: UUID, outcome: Outcome, now: Date, clock: FlowClock) {
-        guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
+    func canResolve(_ task: FlowTask, now: Date, clock: FlowClock) -> Bool {
+        let today = clock.today(now)
+        let targetDay = clock.day(task.day)
+        guard targetDay <= today else { return false }
+        if task.habitGoal != nil && habitDays.contains(where: { $0.taskID == task.id && $0.day == today }) {
+            return false
+        }
+        // A repeating task keeps its ID when it advances to the next occurrence.
+        return !history.contains { event in
+            event.outcome == .completed && event.taskID == task.id &&
+                (clock.day(event.day) == targetDay || clock.today(event.recordedAt) == today)
+        }
+    }
+
+    func completedToday(now: Date, clock: FlowClock, category: FlowCategoryFilter = .all,
+                        favoritesOnly: Bool = false) -> [FlowEvent] {
+        let today = clock.today(now)
+        let completed = history.filter { event in
+            event.outcome == .completed && clock.today(event.recordedAt) == today &&
+                FlowCategories.matches(event.category, filter: category) && (!favoritesOnly || event.favorite == true)
+        }.sorted { $0.recordedAt > $1.recordedAt }
+        // Keep older duplicate records in history while showing one checked row for the day.
+        var shown = Set<UUID>()
+        return completed.filter { shown.insert($0.taskID).inserted }
+    }
+
+    @discardableResult
+    mutating func resolve(_ id: UUID, outcome: Outcome, now: Date, clock: FlowClock) -> Bool {
+        guard let i = tasks.firstIndex(where: { $0.id == id }) else { return false }
         let task = tasks[i]
+        if outcome == .completed || outcome == .failed {
+            guard canResolve(task, now: now, clock: clock) else { return false }
+        }
         if task.habitGoal != nil {
-            if outcome == .completed { markHabit(id, outcome: .completed, now: now, clock: clock); return }
-            if outcome == .failed { markHabit(id, outcome: .failed, now: now, clock: clock); return }
+            if outcome == .completed { return markHabit(id, outcome: .completed, now: now, clock: clock) }
+            if outcome == .failed { return markHabit(id, outcome: .failed, now: now, clock: clock) }
         }
         if task.repeatRule != nil {
             tasks[i].repeatAnchorDay = task.repeatAnchorDay ?? clock.calendar.component(.day, from: task.day)
@@ -235,6 +266,7 @@ extension FlowData {
             tasks[i].originDay = nil
             tasks[i].checklist = task.checklist.map { item in var reset = item; reset.isDone = false; return reset }
         } else { tasks.remove(at: i) }
+        return true
     }
     @discardableResult
     mutating func rollover(now: Date, clock: FlowClock, maxCarries: Int = .max) -> Bool {
@@ -269,18 +301,3 @@ extension FlowData {
         return true
     }
 }
-
-struct FlowUndo {
-    private var snapshot: FlowData?
-    private var day: Date?
-    private(set) var label: String?
-    mutating func remember(_ data: FlowData, label: String, now: Date, clock: FlowClock) {
-        snapshot = data; self.label = label; day = clock.today(now)
-    }
-    mutating func clear() { snapshot = nil; label = nil; day = nil }
-    func candidate(now: Date, clock: FlowClock) -> FlowData? {
-        guard day == clock.today(now) else { return nil }
-        return snapshot
-    }
-}
-

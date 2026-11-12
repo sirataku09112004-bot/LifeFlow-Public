@@ -205,22 +205,6 @@ final class FlowTests: XCTestCase {
         restored.tasks[0].repeatAnchorDay = 32
         XCTAssertThrowsError(try restored.validated())
     }
-    func testUndoRestoresTaskAndHistoryButExpiresAt4AM() {
-        let now = date("2026-11-02T12:00:00")
-        let task = FlowTask(title: "元に戻す", day: date("2026-11-02T00:00:00"), repeatRule: .daily)
-        var data = FlowData(tasks: [task])
-        var undo = FlowUndo()
-        undo.remember(data, label: "達成", now: now, clock: clock)
-        data.resolve(task.id, outcome: .completed, now: now, clock: clock)
-        XCTAssertEqual(data.history.count, 1)
-        let candidate = undo.candidate(now: date("2026-11-03T03:59:59"), clock: clock)
-        XCTAssertEqual(candidate?.tasks, [task])
-        XCTAssertEqual(candidate?.history.count, 0)
-        XCTAssertNil(undo.candidate(now: date("2026-11-03T04:00:00"), clock: clock))
-        undo.clear()
-        XCTAssertNil(undo.label)
-        XCTAssertNil(undo.candidate(now: now, clock: clock))
-    }
     func testAutomaticDateExtractionCleansTitleAndMemo() {
         let now = date("2026-11-02T12:00:00")
         let title = clock.parseInput(title: "明日 買い物", note: "牛乳を買う", now: now)

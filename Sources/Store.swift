@@ -12,7 +12,6 @@ struct BackupDocument: FileDocument {
     @Published private(set) var data = FlowData()
     @Published var error: String?
     @Published private(set) var ready = false
-    @Published private(set) var undo = FlowUndo()
     let clock = FlowClock()
     let reminders = FlowReminders()
     private let url: URL
@@ -74,14 +73,12 @@ struct BackupDocument: FileDocument {
             try bytes.write(to: url, options: [.atomic, .completeFileProtection])
             needsMigrationCopy = false
             data = validated; ready = true; error = nil
-            undo.clear()
             reminders.update(data.tasks)
             return true
         } catch { self.error = "保存できませんでした。変更は反映していません。\n\(error.localizedDescription)"; return false }
     }
     func roll() {
         guard ready else { return }
-        if undo.label != nil && undo.candidate(now: Date(), clock: clock) == nil { undo.clear() }
         var next = data
         guard next.rollover(now: Date(), clock: clock, maxCarries: Self.maxCarriesPerWrite) else {
             error = "古い予定が多いため自動繰り越しを停止しました。元データは保存されています。"
@@ -103,18 +100,8 @@ struct BackupDocument: FileDocument {
         roll()
         // Ignore a stale row/double tap, including one whose next repeat is already scheduled.
         guard data.tasks.first(where: { $0.id == task.id }) == task else { return }
-        let now = Date()
-        let previous = data
-        var next = data; next.resolve(task.id, outcome: outcome, now: now, clock: clock)
-        guard next.tasks != previous.tasks || next.history.count != previous.history.count else { return }
-        if commit(next) {
-            let label = outcome == .completed ? "達成" : outcome == .failed ? "失敗" : "削除"
-            undo.remember(previous, label: label, now: now, clock: clock)
-        }
-    }
-    func undoLast() {
-        guard let previous = undo.candidate(now: Date(), clock: clock) else { undo.clear(); return }
-        commit(previous)
+        var next = data
+        if next.resolve(task.id, outcome: outcome, now: Date(), clock: clock) { commit(next) }
     }
     func star(_ task: FlowTask) {
         guard let current = data.tasks.first(where: { $0.id == task.id }) else { return }
@@ -157,11 +144,7 @@ struct BackupDocument: FileDocument {
     }
 
     func restHabit(_ id: UUID) {
-        let now = Date()
-        let previous = data
         var next = data
-        if next.markHabit(id, outcome: .rest, now: now, clock: clock), commit(next) {
-            undo.remember(previous, label: "休養日の記録", now: now, clock: clock)
-        }
+        if next.markHabit(id, outcome: .rest, now: Date(), clock: clock) { commit(next) }
     }
 }

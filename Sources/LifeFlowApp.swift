@@ -32,6 +32,7 @@ import SwiftUI
 }
 struct FlowHome: View {
     @EnvironmentObject var store: FlowStore
+    @Environment(\.scenePhase) private var phase
     @State private var favoritesOnly = false
     @State private var now = Date()
     @State private var showingHelp = false
@@ -72,11 +73,6 @@ struct FlowHome: View {
                         Label("習慣の記録", systemImage: "circle.grid.2x2")
                     }.listRowBackground(FlowTheme.pale)
                 }
-                if let label = store.undo.label {
-                    Button { store.undoLast() } label: {
-                        Label("直前の\(label)を取り消す", systemImage: "arrow.uturn.backward")
-                    }.listRowBackground(FlowTheme.pale)
-                }
                 if favoritesOnly {
                     Section("お気に入り") {
                         if taskList.favorites.isEmpty { Text("お気に入りはありません").foregroundStyle(.secondary) }
@@ -92,6 +88,13 @@ struct FlowHome: View {
                         Section("今後の予定") {
                             ForEach(later) { taskRow($0) }
                         }
+                    }
+                }
+                let completed = store.data.completedToday(now: now, clock: store.clock,
+                                                          category: categoryFilter, favoritesOnly: favoritesOnly)
+                if !completed.isEmpty {
+                    Section("今日の達成済み") {
+                        ForEach(completed) { completedRow($0) }
                     }
                 }
             }
@@ -162,6 +165,7 @@ struct FlowHome: View {
                 Button("OK") { store.error = nil }
             } message: { Text(store.error ?? "") }
             .onReceive(timer) { now = $0 }
+            .onChange(of: phase) { if $0 == .active { now = Date() } }
             .onAppear { now = Date() }
         }
     }
@@ -169,16 +173,55 @@ struct FlowHome: View {
         if case .named(let name) = categoryFilter { return name }
         return nil
     }
+    private func checkbox(completed: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 7)
+            .fill(completed ? FlowTheme.accent : Color.clear)
+            .overlay {
+                if completed {
+                    Image(systemName: "checkmark").font(.system(size: 19, weight: .bold))
+                        .foregroundStyle(.white)
+                } else {
+                    RoundedRectangle(cornerRadius: 7).strokeBorder(FlowTheme.action, lineWidth: 2)
+                }
+            }
+            .frame(width: 30, height: 30)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+    }
+
+    private func completedRow(_ event: FlowEvent) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            checkbox(completed: true).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(event.title).font(.headline).strikethrough()
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("達成済み").font(.caption.weight(.semibold)).foregroundStyle(FlowTheme.action)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 6)
+        }
+        .accessibilityElement(children: .combine)
+        .listRowBackground(FlowTheme.card)
+    }
+
     func taskRow(_ task: FlowTask) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Button { store.star(task) } label: { Image(systemName: task.favorite ? "star.fill" : "star")
-                    .foregroundStyle(task.favorite ? FlowTheme.star : FlowTheme.ink)
-                    .frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("お気に入り切替")
+        let canResolve = store.data.canResolve(task, now: now, clock: store.clock)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
+                Button { store.resolve(task, .completed) } label: {
+                    checkbox(completed: false).opacity(canResolve ? 1 : 0.4)
+                }
+                .accessibilityLabel("達成")
+                .accessibilityHint(task.title)
+                .disabled(!canResolve)
                 Button { editing = task } label: {
                     VStack(alignment: .leading) {
                         Text(task.title).font(.headline).fixedSize(horizontal: false, vertical: true).foregroundStyle(task.originDay == nil ? FlowTheme.ink : Color.red)
                         Text(store.clock.label(task.day)).font(.caption).foregroundStyle(.secondary)
+                        if !canResolve && store.clock.day(task.day) > store.clock.today(now) {
+                            Text("当日から操作できます").font(.caption).foregroundStyle(.secondary)
+                        }
                         if let priority = task.priority, priority != .normal {
                             Label("優先度：\(priority.label)", systemImage: priority == .high ? "flag.fill" : "arrow.down")
                                 .font(.caption).foregroundStyle(priority == .high ? Color.orange : Color.secondary)
@@ -202,20 +245,27 @@ struct FlowHome: View {
                 }.font(.subheadline)
             }
             if let origin = task.originDay { Text("\(store.clock.label(origin)) から繰り越し").font(.caption).foregroundStyle(.red) }
-            HStack(spacing: 16) {
-                Button { store.resolve(task, .completed) } label: {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(FlowTheme.action)
-                        .frame(minWidth: 44, minHeight: 44).accessibilityLabel("達成")
-                }.disabled(task.habitGoal != nil && task.day > store.clock.today(now))
+            HStack(spacing: 8) {
+                Button { store.star(task) } label: {
+                    Image(systemName: task.favorite ? "star.fill" : "star")
+                        .foregroundStyle(task.favorite ? FlowTheme.star : FlowTheme.ink)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }.accessibilityLabel(task.favorite ? "お気に入りから外す" : "お気に入りに追加")
+                Spacer(minLength: 4)
                 Button { store.resolve(task, .failed) } label: {
-                    Image(systemName: "xmark.circle").foregroundStyle(.red)
-                        .frame(minWidth: 44, minHeight: 44).accessibilityLabel("失敗")
-                }.disabled(task.habitGoal != nil && task.day > store.clock.today(now))
-                Spacer()
+                    Label("失敗", systemImage: "xmark")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.red.opacity(canResolve ? 1 : 0.4))
+                        .padding(.horizontal, 8)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }.disabled(!canResolve)
                 Button(role: .destructive) { deleting = task } label: {
-                    Image(systemName: "trash").frame(minWidth: 44, minHeight: 44).accessibilityLabel("削除")
-                }
-            }.font(.title3)
+                    Image(systemName: "trash").frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }.accessibilityLabel("削除")
+            }
         }
         .padding(.vertical, 4)
         .buttonStyle(.borderless)
