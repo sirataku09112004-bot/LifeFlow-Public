@@ -73,28 +73,24 @@ struct FlowHome: View {
                         Label("習慣の記録", systemImage: "circle.grid.2x2")
                     }.listRowBackground(FlowTheme.pale)
                 }
-                if favoritesOnly {
-                    Section("お気に入り") {
-                        if taskList.favorites.isEmpty { Text("お気に入りはありません").foregroundStyle(.secondary) }
-                        ForEach(taskList.favorites) { taskRow($0) }
-                    }
-                } else {
-                    Section("今日のToDo") {
-                        if taskList.today.isEmpty { Text("今日の未完了ToDoはありません").foregroundStyle(.secondary) }
-                        ForEach(taskList.today) { taskRow($0) }
-                    }
-                    let later = taskList.all.filter { $0.day > store.clock.today(now) }
-                    if !later.isEmpty {
-                        Section("今後の予定") {
-                            ForEach(later) { taskRow($0) }
-                        }
-                    }
-                }
+                let pending = favoritesOnly ? taskList.today.filter(\.favorite) : taskList.today
                 let completed = store.data.completedToday(now: now, clock: store.clock,
                                                           category: categoryFilter, favoritesOnly: favoritesOnly)
-                if !completed.isEmpty {
-                    Section("今日の達成済み") {
-                        ForEach(completed) { completedRow($0) }
+                let completedIDs = Set(completed.map(\.taskID))
+                let unfinished = pending.filter { !completedIDs.contains($0.id) }
+                let progress = FlowTodayProgress(data: store.data, pending: unfinished, completed: completed,
+                                                 now: now, clock: store.clock, category: categoryFilter,
+                                                 favoritesOnly: favoritesOnly)
+                Section("今日のToDo") {
+                    todayProgress(progress)
+                    ForEach(unfinished) { taskRow($0) }
+                    ForEach(completed) { completedRow($0) }
+                }
+                let upcoming = favoritesOnly ? taskList.favorites : taskList.all
+                let later = upcoming.filter { $0.day > store.clock.today(now) }
+                if !later.isEmpty {
+                    Section("今後の予定") {
+                        ForEach(later) { taskRow($0) }
                     }
                 }
             }
@@ -189,9 +185,51 @@ struct FlowHome: View {
             .contentShape(Rectangle())
     }
 
+    private func todayProgress(_ progress: FlowTodayProgress) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if progress.total == 0 {
+                Text("今日のToDoはありません").foregroundStyle(.secondary)
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack { progressCount(progress); Spacer(minLength: 8); progressPercent(progress) }
+                    VStack(alignment: .leading, spacing: 4) { progressCount(progress); progressPercent(progress) }
+                }
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(FlowTheme.pale)
+                        Capsule().fill(FlowTheme.accent)
+                            .frame(width: geometry.size.width * progress.fraction)
+                    }
+                }
+                .frame(height: 5)
+                .accessibilityHidden(true)
+            }
+        }
+        .font(.subheadline)
+        .padding(.vertical, 3)
+        .listRowBackground(FlowTheme.card)
+    }
+
+    private func progressCount(_ progress: FlowTodayProgress) -> some View {
+        Text("\(progress.completed) / \(progress.total)件達成").fontWeight(.semibold)
+    }
+
+    private func progressPercent(_ progress: FlowTodayProgress) -> some View {
+        Text(progress.completed == progress.total ? "すべて達成！ 100%" : "\(progress.percent)%")
+            .foregroundStyle(FlowTheme.action)
+    }
+
     private func completedRow(_ event: FlowEvent) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            checkbox(completed: true).accessibilityHidden(true)
+        let reversible = store.data.canUndoCompletion(event.id, now: now, clock: store.clock)
+        return HStack(alignment: .top, spacing: 10) {
+            if reversible {
+                Button { store.undoCompletion(event.id) } label: { checkbox(completed: true) }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("達成を取り消す")
+                    .accessibilityHint(event.title)
+            } else {
+                checkbox(completed: true).accessibilityHidden(true)
+            }
             VStack(alignment: .leading, spacing: 5) {
                 Text(event.title).font(.headline).strikethrough()
                     .foregroundStyle(.secondary)
@@ -201,7 +239,7 @@ struct FlowHome: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 6)
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .listRowBackground(FlowTheme.card)
     }
 

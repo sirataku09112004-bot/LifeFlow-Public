@@ -26,6 +26,12 @@ struct FlowTask: Identifiable, Codable, Equatable {
     var habitGoal: Int? = nil
     var muteReminder: Bool? = nil
 }
+struct FlowCompletionUndo: Codable {
+    let original: FlowTask
+    let next: FlowTask?
+    let habitRecord: FlowHabitRecord?
+}
+
 struct FlowEvent: Identifiable, Codable {
     var id = UUID()
     var taskID: UUID
@@ -36,6 +42,7 @@ struct FlowEvent: Identifiable, Codable {
     var category: String? = nil
     var subtasks: [FlowSubtask]? = nil
     var favorite: Bool? = nil
+    var completionUndo: FlowCompletionUndo? = nil
 }
 struct FlowData: Codable {
     static let currentSchema = 5
@@ -212,7 +219,7 @@ enum FlowSearch {
 }
 extension FlowData {
     mutating func record(_ task: FlowTask, outcome: Outcome, now: Date) {
-        history.append(FlowEvent(taskID: task.id, title: task.title, day: task.day, recordedAt: now, outcome: outcome, category: FlowCategories.normalized(task.category), subtasks: task.subtasks, favorite: outcome == .completed && task.favorite ? true : nil))
+        history.append(FlowEvent(taskID: task.id, title: task.title, day: task.day, recordedAt: now, outcome: outcome, category: FlowCategories.normalized(task.category), subtasks: task.subtasks, favorite: (outcome == .completed || outcome == .failed) && task.favorite ? true : nil))
     }
     func canResolve(_ task: FlowTask, now: Date, clock: FlowClock) -> Bool {
         let today = clock.today(now)
@@ -232,12 +239,14 @@ extension FlowData {
                         favoritesOnly: Bool = false) -> [FlowEvent] {
         let today = clock.today(now)
         let completed = history.filter { event in
-            event.outcome == .completed && clock.today(event.recordedAt) == today &&
-                FlowCategories.matches(event.category, filter: category) && (!favoritesOnly || event.favorite == true)
+            event.outcome == .completed && clock.today(event.recordedAt) == today
         }.sorted { $0.recordedAt > $1.recordedAt }
         // Keep older duplicate records in history while showing one checked row for the day.
         var shown = Set<UUID>()
-        return completed.filter { shown.insert($0.taskID).inserted }
+        return completed.filter {
+            shown.insert($0.taskID).inserted && FlowCategories.matches($0.category, filter: category) &&
+                (!favoritesOnly || $0.favorite == true)
+        }
     }
 
     @discardableResult
@@ -248,7 +257,11 @@ extension FlowData {
             guard canResolve(task, now: now, clock: clock) else { return false }
         }
         if task.habitGoal != nil {
-            if outcome == .completed { return markHabit(id, outcome: .completed, now: now, clock: clock) }
+            if outcome == .completed {
+                guard markHabit(id, outcome: .completed, now: now, clock: clock) else { return false }
+                saveCompletionUndo(original: task, habitRecord: habitDays.last)
+                return true
+            }
             if outcome == .failed { return markHabit(id, outcome: .failed, now: now, clock: clock) }
         }
         if task.repeatRule != nil {
@@ -266,8 +279,54 @@ extension FlowData {
             tasks[i].originDay = nil
             tasks[i].checklist = task.checklist.map { item in var reset = item; reset.isDone = false; return reset }
         } else { tasks.remove(at: i) }
+        if outcome == .completed { saveCompletionUndo(original: task) }
         return true
     }
+    private mutating func saveCompletionUndo(original: FlowTask, habitRecord: FlowHabitRecord? = nil) {
+        let next = tasks.first { $0.id == original.id }
+        history[history.count - 1].completionUndo = FlowCompletionUndo(original: original, next: next, habitRecord: habitRecord)
+    }
+
+    private func reversibleCompletionIndex(_ eventID: UUID, now: Date, clock: FlowClock) -> Int? {
+        guard let index = history.firstIndex(where: { $0.id == eventID }) else { return nil }
+        let event = history[index]
+        guard event.outcome == .completed, let snapshot = event.completionUndo,
+              snapshot.original.id == event.taskID, snapshot.original.day == event.day,
+              clock.today(event.recordedAt) == clock.today(now),
+              !history[(index + 1)...].contains(where: { $0.taskID == event.taskID }),
+              !history[..<index].contains(where: {
+                  $0.taskID == event.taskID && $0.outcome == .completed &&
+                      (clock.day($0.day) == clock.day(event.day) || clock.today($0.recordedAt) == clock.today(now))
+              }),
+              tasks.first(where: { $0.id == event.taskID }) == snapshot.next else { return nil }
+        if snapshot.original.habitGoal != nil {
+            guard let habit = snapshot.habitRecord, habit.taskID == event.taskID,
+                  habit.day == clock.today(now), habit.outcome == .completed,
+                  habitDays.contains(habit) else { return nil }
+        } else if snapshot.habitRecord != nil {
+            return nil
+        }
+        return index
+    }
+
+    func canUndoCompletion(_ eventID: UUID, now: Date, clock: FlowClock) -> Bool {
+        reversibleCompletionIndex(eventID, now: now, clock: clock) != nil
+    }
+
+    @discardableResult
+    mutating func undoCompletion(_ eventID: UUID, now: Date, clock: FlowClock) -> Bool {
+        guard let index = reversibleCompletionIndex(eventID, now: now, clock: clock),
+              let snapshot = history[index].completionUndo else { return false }
+        if let taskIndex = tasks.firstIndex(where: { $0.id == snapshot.original.id }) {
+            tasks[taskIndex] = snapshot.original
+        } else {
+            tasks.append(snapshot.original)
+        }
+        if let habit = snapshot.habitRecord { habitDays.removeAll { $0 == habit } }
+        history.remove(at: index)
+        return true
+    }
+
     @discardableResult
     mutating func rollover(now: Date, clock: FlowClock, maxCarries: Int = .max) -> Bool {
         let today = clock.today(now)

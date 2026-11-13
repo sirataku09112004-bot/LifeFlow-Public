@@ -28,3 +28,32 @@ struct FlowTaskList {
     }
 }
 
+
+struct FlowTodayProgress {
+    let completed: Int
+    let total: Int
+    var fraction: Double { total == 0 ? 0 : Double(completed) / Double(total) }
+    var percent: Int { total == 0 ? 0 : (100 * completed) / total }
+
+    init(data: FlowData, pending: [FlowTask], completed: [FlowEvent],
+         now: Date, clock: FlowClock, category: FlowCategoryFilter, favoritesOnly: Bool) {
+        let today = clock.today(now)
+        let doneIDs = Set(completed.map(\.taskID))
+        var eligible = Set(pending.map(\.id))
+        // Failed items remain part of today's workload after they are moved to a future date.
+        // A later deletion removes the failed item from today's workload.
+        var lastFailureOrDeletion: [UUID: FlowEvent] = [:]
+        for event in data.history where clock.today(event.recordedAt) == today {
+            if event.outcome == .failed || event.outcome == .deleted {
+                lastFailureOrDeletion[event.taskID] = event
+            }
+        }
+        for event in lastFailureOrDeletion.values where event.outcome == .failed {
+            if FlowCategories.matches(event.category, filter: category) && (!favoritesOnly || event.favorite == true) {
+                eligible.insert(event.taskID)
+            }
+        }
+        self.completed = doneIDs.count
+        total = eligible.union(doneIDs).count
+    }
+}

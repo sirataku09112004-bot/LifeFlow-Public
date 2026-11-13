@@ -61,7 +61,13 @@ struct BackupDocument: FileDocument {
     @discardableResult private func commit(_ candidate: FlowData, restoring: Bool = false) -> Bool {
         guard ready || restoring else { return false }
         do {
-            let validated = try candidate.validated()
+            var validated = try candidate.validated()
+            let today = clock.today()
+            for index in validated.history.indices where validated.history[index].completionUndo != nil {
+                if clock.today(validated.history[index].recordedAt) < today {
+                    validated.history[index].completionUndo = nil
+                }
+            }
             let bytes = try Self.encode(validated)
             guard bytes.count <= Self.maxDataBytes else { throw FlowError.invalidBackup }
             if (restoring || needsMigrationCopy) && FileManager.default.fileExists(atPath: url.path) {
@@ -103,6 +109,11 @@ struct BackupDocument: FileDocument {
         var next = data
         if next.resolve(task.id, outcome: outcome, now: Date(), clock: clock) { commit(next) }
     }
+    func undoCompletion(_ eventID: UUID) {
+        var next = data
+        if next.undoCompletion(eventID, now: Date(), clock: clock) { commit(next) }
+    }
+
     func star(_ task: FlowTask) {
         guard let current = data.tasks.first(where: { $0.id == task.id }) else { return }
         var next = current; next.favorite.toggle(); save(next)
