@@ -115,4 +115,36 @@ final class CompletionUndoTests: XCTestCase {
         XCTAssertEqual(progress(now).total, 1)
         XCTAssertEqual(progress(now).percent, 0)
     }
+
+    func testDisplayedOccurrenceCompletesWithLatestEditsAndRejectsRepeatedTap() {
+        let now = date("2026-11-13T12:00:00")
+        let displayed = FlowTask(title: "変更前", day: clock.today(now), repeatRule: .daily)
+        var current = displayed
+        current.title = "変更後"
+        current.favorite = true
+        var data = FlowData(tasks: [current])
+        XCTAssertEqual(data.resolveDisplayedTask(displayed, outcome: .completed, now: now,
+                                                 clock: clock, maxCarries: 100), .resolved)
+        XCTAssertEqual(data.history.map(\.title), ["変更後"])
+        XCTAssertEqual(data.resolveDisplayedTask(displayed, outcome: .completed, now: now,
+                                                 clock: clock, maxCarries: 100), .stale)
+        let tomorrow = data.tasks[0]
+        XCTAssertEqual(data.resolveDisplayedTask(tomorrow, outcome: .completed, now: now,
+                                                 clock: clock, maxCarries: 100), .blocked(.future))
+        XCTAssertEqual(data.history.count, 1)
+        XCTAssertEqual(data.resolveDisplayedTask(tomorrow, outcome: .completed,
+                                                 now: date("2026-11-14T04:00:00"),
+                                                 clock: clock, maxCarries: 100), .resolved)
+    }
+
+    func testDisplayedTaskCompletesWhenRolloverUpdatesItsDay() {
+        let now = date("2026-11-13T04:00:00")
+        let task = FlowTask(title: "日付をまたいだ画面", day: date("2026-11-12T00:00:00"))
+        var data = FlowData(tasks: [task])
+        XCTAssertEqual(data.resolveDisplayedTask(task, outcome: .completed, now: now,
+                                                 clock: clock, maxCarries: 100), .resolved)
+        XCTAssertEqual(data.history.map(\.outcome), [.carried, .completed])
+        XCTAssertEqual(data.history.last?.day, clock.today(now))
+        XCTAssertTrue(data.tasks.isEmpty)
+    }
 }

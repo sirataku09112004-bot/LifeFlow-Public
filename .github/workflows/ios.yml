@@ -27,3 +27,12 @@ jobs:
           path: artifacts/LifeFlow-unsigned.ipa
           if-no-files-found: error
           retention-days: 7
+      - name: Tap ToDo checkboxes on an iPhone simulator
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          device="$(xcrun simctl list devices available --json | python3 -c 'import json, sys; devices=json.load(sys.stdin)["devices"]; phones=[d for runtime, group in sorted(devices.items(), reverse=True) if ".iOS-" in runtime for d in group if d["name"].startswith("iPhone")]; print(next((d for d in phones if "Pro Max" in d["name"]), phones[0])["udid"])')"
+          xcodebuild -project LifeFlow.xcodeproj -scheme LifeFlow -configuration Debug \
+            -destination "platform=iOS Simulator,id=$device" -parallel-testing-enabled NO \
+            -derivedDataPath build/simulator test

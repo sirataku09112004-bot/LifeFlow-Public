@@ -20,8 +20,16 @@ struct BackupDocument: FileDocument {
     private static let maxCarriesPerWrite = 10_000
     private struct SchemaHeader: Decodable { let schemaVersion: Int }
     init() {
-        url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("LifeFlow", isDirectory: true).appendingPathComponent("lifeflow.json")
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        var directory = support.appendingPathComponent("LifeFlow", isDirectory: true)
+        #if DEBUG && targetEnvironment(simulator)
+        let fixtureID = ProcessInfo.processInfo.environment["LIFEFLOW_UI_TEST_STORE"].flatMap(UUID.init(uuidString:))
+        if let fixtureID {
+            directory = support.appendingPathComponent("LifeFlowUITests", isDirectory: true)
+                .appendingPathComponent(fixtureID.uuidString, isDirectory: true)
+        }
+        #endif
+        url = directory.appendingPathComponent("lifeflow.json")
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             #if DEBUG
@@ -34,6 +42,19 @@ struct BackupDocument: FileDocument {
                 ])
                 ready = true
                 return
+            }
+            #endif
+            #if DEBUG && targetEnvironment(simulator)
+            if fixtureID != nil && !FileManager.default.fileExists(atPath: url.path) {
+                let today = clock.today()
+                let tomorrow = clock.calendar.date(byAdding: .day, value: 1, to: today)!
+                let fixture = FlowData(tasks: [
+                    FlowTask(title: "A Normal", day: today),
+                    FlowTask(title: "B Daily", day: today, repeatRule: .daily),
+                    FlowTask(title: "C Habit", day: today, category: "習慣", habitGoal: 3),
+                    FlowTask(title: "D Future", day: tomorrow)
+                ])
+                try Self.encode(fixture).write(to: url, options: [.atomic, .completeFileProtection])
             }
             #endif
             if FileManager.default.fileExists(atPath: url.path) {
@@ -103,15 +124,25 @@ struct BackupDocument: FileDocument {
         return commit(next)
     }
     func resolve(_ task: FlowTask, _ outcome: Outcome) {
-        roll()
-        // Ignore a stale row/double tap, including one whose next repeat is already scheduled.
-        guard data.tasks.first(where: { $0.id == task.id }) == task else { return }
+        guard ready else { return }
         var next = data
-        if next.resolve(task.id, outcome: outcome, now: Date(), clock: clock) { commit(next) }
+        switch next.resolveDisplayedTask(task, outcome: outcome, now: Date(), clock: clock,
+                                         maxCarries: Self.maxCarriesPerWrite) {
+        case .resolved: commit(next)
+        case .stale: break
+        case .blocked(let reason): error = reason.message
+        case .rolloverLimit: error = "古い予定が多いため処理を停止しました。元データは保存されています。"
+        }
     }
+
     func undoCompletion(_ eventID: UUID) {
+        guard ready, data.history.contains(where: { $0.id == eventID }) else { return }
         var next = data
-        if next.undoCompletion(eventID, now: Date(), clock: clock) { commit(next) }
+        if next.undoCompletion(eventID, now: Date(), clock: clock) {
+            commit(next)
+        } else {
+            error = "この記録は取り消せません。"
+        }
     }
 
     func star(_ task: FlowTask) {

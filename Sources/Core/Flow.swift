@@ -217,22 +217,56 @@ enum FlowSearch {
         return terms.allSatisfy { text.range(of: $0, options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "ja_JP")) != nil }
     }
 }
+enum FlowResolutionBlock: Equatable {
+    case future, habitRecorded, alreadyCompleted
+
+    var message: String {
+        switch self {
+        case .future: return "予定日になると達成できます"
+        case .habitRecorded: return "今日の習慣は記録済みです"
+        case .alreadyCompleted: return "このToDoはすでに達成済みです"
+        }
+    }
+}
+
+enum FlowDisplayedResolution: Equatable {
+    case resolved, stale, blocked(FlowResolutionBlock), rolloverLimit
+}
+
 extension FlowData {
     mutating func record(_ task: FlowTask, outcome: Outcome, now: Date) {
         history.append(FlowEvent(taskID: task.id, title: task.title, day: task.day, recordedAt: now, outcome: outcome, category: FlowCategories.normalized(task.category), subtasks: task.subtasks, favorite: (outcome == .completed || outcome == .failed) && task.favorite ? true : nil))
     }
-    func canResolve(_ task: FlowTask, now: Date, clock: FlowClock) -> Bool {
+    func resolutionBlock(for task: FlowTask, now: Date, clock: FlowClock) -> FlowResolutionBlock? {
         let today = clock.today(now)
         let targetDay = clock.day(task.day)
-        guard targetDay <= today else { return false }
+        guard targetDay <= today else { return .future }
         if task.habitGoal != nil && habitDays.contains(where: { $0.taskID == task.id && $0.day == today }) {
-            return false
+            return .habitRecorded
         }
         // A repeating task keeps its ID when it advances to the next occurrence.
-        return !history.contains { event in
+        let alreadyCompleted = history.contains { event in
             event.outcome == .completed && event.taskID == task.id &&
                 (clock.day(event.day) == targetDay || clock.today(event.recordedAt) == today)
         }
+        return alreadyCompleted ? .alreadyCompleted : nil
+    }
+
+    mutating func resolveDisplayedTask(_ displayed: FlowTask, outcome: Outcome, now: Date,
+                                       clock: FlowClock, maxCarries: Int) -> FlowDisplayedResolution {
+        // Reject a tap from an old occurrence. Edits to its title, star or checklist
+        // do not change which occurrence the user tapped.
+        guard tasks.contains(where: { $0.id == displayed.id && $0.day == displayed.day }) else { return .stale }
+        var updated = self
+        guard updated.rollover(now: now, clock: clock, maxCarries: maxCarries) else { return .rolloverLimit }
+        guard let current = updated.tasks.first(where: { $0.id == displayed.id }) else { return .stale }
+        if outcome == .completed || outcome == .failed,
+           let block = updated.resolutionBlock(for: current, now: now, clock: clock) {
+            return .blocked(block)
+        }
+        guard updated.resolve(current.id, outcome: outcome, now: now, clock: clock) else { return .stale }
+        self = updated
+        return .resolved
     }
 
     func completedToday(now: Date, clock: FlowClock, category: FlowCategoryFilter = .all,
@@ -254,7 +288,7 @@ extension FlowData {
         guard let i = tasks.firstIndex(where: { $0.id == id }) else { return false }
         let task = tasks[i]
         if outcome == .completed || outcome == .failed {
-            guard canResolve(task, now: now, clock: clock) else { return false }
+            guard resolutionBlock(for: task, now: now, clock: clock) == nil else { return false }
         }
         if task.habitGoal != nil {
             if outcome == .completed {

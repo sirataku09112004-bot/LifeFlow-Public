@@ -182,7 +182,19 @@ struct FlowHome: View {
             }
             .frame(width: 30, height: 30)
             .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
+            .background(FlowTheme.card)
+            .contentShape(.interaction, Rectangle())
+    }
+
+    private func completionButton(title: String, completed: Bool, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            checkbox(completed: completed).opacity(enabled || completed ? 1 : 0.4)
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .accessibilityLabel(completed ? "達成を取り消す" : "達成")
+        .accessibilityHint(title)
+        .accessibilityIdentifier((completed ? "undo:" : "complete:") + title)
     }
 
     private func todayProgress(_ progress: FlowTodayProgress) -> some View {
@@ -202,7 +214,10 @@ struct FlowHome: View {
                     }
                 }
                 .frame(height: 5)
-                .accessibilityHidden(true)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("今日の進捗")
+                .accessibilityValue("\(progress.percent)%")
+                .accessibilityIdentifier("today-progress-bar")
             }
         }
         .font(.subheadline)
@@ -212,6 +227,7 @@ struct FlowHome: View {
 
     private func progressCount(_ progress: FlowTodayProgress) -> some View {
         Text("\(progress.completed) / \(progress.total)件達成").fontWeight(.semibold)
+            .accessibilityIdentifier("today-progress-count")
     }
 
     private func progressPercent(_ progress: FlowTodayProgress) -> some View {
@@ -222,19 +238,18 @@ struct FlowHome: View {
     private func completedRow(_ event: FlowEvent) -> some View {
         let reversible = store.data.canUndoCompletion(event.id, now: now, clock: store.clock)
         return HStack(alignment: .top, spacing: 10) {
-            if reversible {
-                Button { store.undoCompletion(event.id) } label: { checkbox(completed: true) }
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel("達成を取り消す")
-                    .accessibilityHint(event.title)
-            } else {
-                checkbox(completed: true).accessibilityHidden(true)
+            completionButton(title: event.title, completed: true, enabled: reversible) {
+                store.undoCompletion(event.id)
             }
             VStack(alignment: .leading, spacing: 5) {
                 Text(event.title).font(.headline).strikethrough()
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("達成済み").font(.caption.weight(.semibold)).foregroundStyle(FlowTheme.action)
+                if !reversible {
+                    Text(event.completionUndo == nil ? "この記録は取り消せません（復元情報なし）" : "この記録は取り消せません")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 6)
@@ -244,21 +259,19 @@ struct FlowHome: View {
     }
 
     func taskRow(_ task: FlowTask) -> some View {
-        let canResolve = store.data.canResolve(task, now: now, clock: store.clock)
+        let block = store.data.resolutionBlock(for: task, now: now, clock: store.clock)
+        let canResolve = block == nil
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 10) {
-                Button { store.resolve(task, .completed) } label: {
-                    checkbox(completed: false).opacity(canResolve ? 1 : 0.4)
+                completionButton(title: task.title, completed: false, enabled: canResolve) {
+                    store.resolve(task, .completed)
                 }
-                .accessibilityLabel("達成")
-                .accessibilityHint(task.title)
-                .disabled(!canResolve)
                 Button { editing = task } label: {
                     VStack(alignment: .leading) {
                         Text(task.title).font(.headline).fixedSize(horizontal: false, vertical: true).foregroundStyle(task.originDay == nil ? FlowTheme.ink : Color.red)
                         Text(store.clock.label(task.day)).font(.caption).foregroundStyle(.secondary)
-                        if !canResolve && store.clock.day(task.day) > store.clock.today(now) {
-                            Text("当日から操作できます").font(.caption).foregroundStyle(.secondary)
+                        if let block {
+                            Text(block.message).font(.caption).foregroundStyle(.secondary)
                         }
                         if let priority = task.priority, priority != .normal {
                             Label("優先度：\(priority.label)", systemImage: priority == .high ? "flag.fill" : "arrow.down")
@@ -267,7 +280,7 @@ struct FlowHome: View {
                         if let rule = task.repeatRule, task.habitGoal == nil { Label(rule.label, systemImage: "repeat").font(.caption).foregroundStyle(.secondary) }
                         if let category = FlowCategories.normalized(task.category) { Label(category, systemImage: "folder").font(.caption).foregroundStyle(.secondary) }
                     }.frame(maxWidth: .infinity, alignment: .leading)
-                }
+                }.buttonStyle(.borderless)
             }
             if !task.note.isEmpty { Text(task.note).font(.caption) }
             if !task.checklist.isEmpty {
