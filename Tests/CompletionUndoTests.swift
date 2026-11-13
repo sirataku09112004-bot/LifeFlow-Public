@@ -130,7 +130,7 @@ final class CompletionUndoTests: XCTestCase {
                                                  clock: clock, maxCarries: 100), .stale)
         let tomorrow = data.tasks[0]
         XCTAssertEqual(data.resolveDisplayedTask(tomorrow, outcome: .completed, now: now,
-                                                 clock: clock, maxCarries: 100), .blocked(.future))
+                                                 clock: clock, maxCarries: 100), .blocked(.alreadyCompleted))
         XCTAssertEqual(data.history.count, 1)
         XCTAssertEqual(data.resolveDisplayedTask(tomorrow, outcome: .completed,
                                                  now: date("2026-11-14T04:00:00"),

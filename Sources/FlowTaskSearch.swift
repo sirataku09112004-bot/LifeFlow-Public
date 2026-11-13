@@ -15,7 +15,7 @@ struct FlowTaskSearch: View {
                     Button { editing = task } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(task.title).font(.headline)
-                            Text(store.clock.label(task.day)).font(.caption)
+                            Text(store.clock.label(task.deadline)).font(.caption)
                             if !task.note.isEmpty { Text(task.note).font(.caption).lineLimit(2) }
                         }.foregroundStyle(task.originDay == nil ? FlowTheme.ink : Color.red)
                     }

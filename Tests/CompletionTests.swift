@@ -44,14 +44,26 @@ final class CompletionTests: XCTestCase {
         }
     }
 
-    func testFutureOneOffCannotCompleteOrFailButCanDelete() {
+    func testFutureOneOffCanCompleteOrDeleteButCannotFail() {
         let now = date("2026-11-12T20:00:00")
         let task = FlowTask(title: "今後の予定", day: date("2026-11-13T00:00:00"))
+        var data = FlowData(tasks: [task])
+        XCTAssertFalse(data.resolve(task.id, outcome: .failed, now: now, clock: clock))
+        XCTAssertTrue(data.history.isEmpty)
+        XCTAssertTrue(data.resolve(task.id, outcome: .completed, now: now, clock: clock))
+        XCTAssertEqual(data.history.last?.deadline, task.day)
+        var separate = FlowData(tasks: [task])
+        XCTAssertTrue(separate.resolve(task.id, outcome: .deleted, now: now, clock: clock))
+    }
+
+    func testFutureHabitCannotBeRecorded() {
+        let now = date("2026-11-12T20:00:00")
+        let task = FlowTask(title: "習慣", day: date("2026-11-13T00:00:00"), habitGoal: 3)
         var data = FlowData(tasks: [task])
         XCTAssertFalse(data.resolve(task.id, outcome: .completed, now: now, clock: clock))
         XCTAssertFalse(data.resolve(task.id, outcome: .failed, now: now, clock: clock))
         XCTAssertTrue(data.history.isEmpty)
-        XCTAssertTrue(data.resolve(task.id, outcome: .deleted, now: now, clock: clock))
+        XCTAssertTrue(data.habitDays.isEmpty)
     }
 
     func testMovingNextOccurrenceBackTodayCannotCompleteAgain() {

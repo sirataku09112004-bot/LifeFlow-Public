@@ -44,14 +44,19 @@ final class CompletionTapTests: XCTestCase {
         checkRecurringTask("C Habit")
     }
 
-    func testFutureCheckboxIsDisabled() {
+    func testFutureCheckboxCompletesEarlyAndUndoRestoresIt() {
         let app = XCUIApplication()
         launch(app)
-        let future = app.buttons["complete:D Future"]
-        for _ in 0..<4 where !future.exists { app.swipeUp() }
-        XCTAssertTrue(future.exists)
-        XCTAssertFalse(future.isEnabled)
-        XCTAssertFalse(app.buttons["undo:D Future"].exists)
+        let future = reveal(app.buttons["complete:D Future"], in: app)
+        XCTAssertTrue(future.isEnabled)
+        future.tap()
+
+        let undo = reveal(app.buttons["undo:D Future"], in: app, down: false)
+        let count = reveal(app.staticTexts["today-progress-count"], in: app, down: false)
+        XCTAssertEqual(count.label, "1 / 4件達成")
+        reveal(undo, in: app).tap()
+        XCTAssertTrue(reveal(future, in: app).isEnabled)
+        XCTAssertEqual(reveal(count, in: app, down: false).label, "0 / 3件達成")
     }
 
     private func checkRecurringTask(_ title: String) {

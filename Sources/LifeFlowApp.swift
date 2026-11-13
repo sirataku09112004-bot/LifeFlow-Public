@@ -246,6 +246,7 @@ struct FlowHome: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("達成済み").font(.caption.weight(.semibold)).foregroundStyle(FlowTheme.action)
+                Text("期限 \(store.clock.label(event.deadline))").font(.caption).foregroundStyle(.secondary)
                 if !reversible {
                     Text(event.completionUndo == nil ? "この記録は取り消せません（復元情報なし）" : "この記録は取り消せません")
                         .font(.caption).foregroundStyle(.secondary)
@@ -258,9 +259,23 @@ struct FlowHome: View {
         .listRowBackground(FlowTheme.card)
     }
 
+    private func deadlineStatus(_ task: FlowTask) -> some View {
+        let days = store.clock.daysUntilDeadline(task.deadline, now: now)
+        let text: String
+        switch days {
+        case ..<0: text = "\(-days)日超過"
+        case 0: text = "今日が期限"
+        case 1: text = "明日が期限"
+        default: text = "あと\(days)日"
+        }
+        let color: Color = days < 0 ? .red : (days <= 3 ? Color(red: 0.62, green: 0.30, blue: 0.04) : FlowTheme.ink)
+        return Text(text).font(.caption.weight(days <= 3 ? .semibold : .regular)).foregroundStyle(color)
+    }
+
     func taskRow(_ task: FlowTask) -> some View {
         let block = store.data.resolutionBlock(for: task, now: now, clock: store.clock)
         let canResolve = block == nil
+        let canFail = store.data.resolutionBlock(for: task, outcome: .failed, now: now, clock: store.clock) == nil
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 10) {
                 completionButton(title: task.title, completed: false, enabled: canResolve) {
@@ -269,7 +284,8 @@ struct FlowHome: View {
                 Button { editing = task } label: {
                     VStack(alignment: .leading) {
                         Text(task.title).font(.headline).fixedSize(horizontal: false, vertical: true).foregroundStyle(task.originDay == nil ? FlowTheme.ink : Color.red)
-                        Text(store.clock.label(task.day)).font(.caption).foregroundStyle(.secondary)
+                        Text(store.clock.label(task.deadline)).font(.caption).foregroundStyle(.secondary)
+                        deadlineStatus(task)
                         if let block {
                             Text(block.message).font(.caption).foregroundStyle(.secondary)
                         }
@@ -295,7 +311,9 @@ struct FlowHome: View {
                     }
                 }.font(.subheadline)
             }
-            if let origin = task.originDay { Text("\(store.clock.label(origin)) から繰り越し").font(.caption).foregroundStyle(.red) }
+            if task.originDay != nil && task.deadline != task.day {
+                Text("繰り越し先 \(store.clock.label(task.day))").font(.caption).foregroundStyle(.secondary)
+            }
             HStack(spacing: 8) {
                 Button { store.star(task) } label: {
                     Image(systemName: task.favorite ? "star.fill" : "star")
@@ -307,11 +325,11 @@ struct FlowHome: View {
                 Button { store.resolve(task, .failed) } label: {
                     Label("失敗", systemImage: "xmark")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.red.opacity(canResolve ? 1 : 0.4))
+                        .foregroundStyle(Color.red.opacity(canFail ? 1 : 0.4))
                         .padding(.horizontal, 8)
                         .frame(minWidth: 44, minHeight: 44)
                         .contentShape(Rectangle())
-                }.disabled(!canResolve)
+                }.disabled(!canFail)
                 Button(role: .destructive) { deleting = task } label: {
                     Image(systemName: "trash").frame(width: 44, height: 44)
                         .contentShape(Rectangle())
@@ -346,7 +364,10 @@ struct TaskEditor: View {
         hasEditedInput = true
         let parsed = automaticDates ? store.clock.parseInput(title: task.title, note: task.note, now: Date()) : nil
         let key = parsed.map { "\($0.fromNote)-\($0.expression)-\($0.date.timeIntervalSince1970)" }
-        if !manuallySetDate, key != lastAutoKey, let parsed = parsed { task.day = parsed.date }
+        if !manuallySetDate, key != lastAutoKey, let parsed = parsed {
+            task.day = parsed.date
+            task.originDay = nil
+        }
         lastAutoKey = key
     }
     private var isNew: Bool { !store.data.tasks.contains { $0.id == task.id } }
@@ -413,8 +434,10 @@ struct TaskEditor: View {
         Group {
             TextField("メモ", text: $task.note, axis: .vertical)
             Toggle("文章の日付を使う", isOn: $automaticDates)
-            DatePicker("予定日", selection: Binding(get: { task.day }, set: {
+            DatePicker(task.habitGoal == nil ? "期限" : "予定日",
+                       selection: Binding(get: { task.deadline }, set: {
                 task.day = $0
+                task.originDay = nil
                 manuallySetDate = true
             }), displayedComponents: .date)
             Picker("優先度", selection: Binding(get: { task.priority ?? .normal }, set: { task.priority = $0 == .normal ? nil : $0 })) {
@@ -443,7 +466,10 @@ struct TaskEditor: View {
             guard !title.isEmpty else { return }
             candidate.title = title
             candidate.note = parsed.note.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !manuallySetDate { candidate.day = parsed.date }
+            if !manuallySetDate {
+                candidate.day = parsed.date
+                candidate.originDay = nil
+            }
         } else {
             candidate.title = savedTitle
             candidate.note = savedNote
@@ -455,7 +481,7 @@ struct TaskEditor: View {
             return clean
         }
         candidate.day = store.clock.day(candidate.day)
-        if previous?.repeatRule != candidate.repeatRule || previous?.day != candidate.day {
+        if previous?.repeatRule != candidate.repeatRule || previous?.deadline != candidate.deadline {
             candidate.repeatAnchorDay = candidate.repeatRule.map { _ in store.clock.calendar.component(.day, from: candidate.day) }
             candidate.repeatAnchorWeekday = candidate.repeatRule.map { _ in store.clock.calendar.component(.weekday, from: candidate.day) }
         }
