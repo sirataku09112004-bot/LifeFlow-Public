@@ -69,13 +69,18 @@ final class PlanningUITests: XCTestCase {
         XCTAssertTrue(status.label.hasSuffix("・達成"))
     }
 
-    func testWidgetTaskLinkOpensToDoEditor() {
-        guard #available(iOS 18.0, *) else { return }
+    @MainActor
+    func testWidgetTaskLinkOpensToDoEditor() throws {
+        guard #available(iOS 18.4, *) else { throw XCTSkip("OS-level URL opening requires iOS 18.4.") }
         let app = launch()
         app.tabBars.buttons["年間目標"].tap()
-        app.open(URL(string: "lifeflow://todo/EF6A4AF5-6253-4D4D-B67B-9DC9BFE33F50")!)
+        XCUIDevice.shared.system.open(URL(string: "lifeflow://todo/EF6A4AF5-6253-4D4D-B67B-9DC9BFE33F50")!)
+        let prompt = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
+        if prompt.waitForExistence(timeout: 2), prompt.buttons["Open"].exists {
+            prompt.buttons["Open"].tap()
+        }
         let title = app.textFields.firstMatch
-        XCTAssertTrue(title.waitForExistence(timeout: 8), app.debugDescription)
+        XCTAssertTrue(title.waitForExistence(timeout: 8))
         XCTAssertEqual(title.value as? String, "D Future")
     }
 
