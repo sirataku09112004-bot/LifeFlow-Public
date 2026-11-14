@@ -32,6 +32,19 @@ extension FlowData {
     }
 
     @discardableResult
+    mutating func editPastHabit(_ id: UUID, day: Date, outcome: FlowHabitOutcome?,
+                                now: Date, clock: FlowClock) -> Bool {
+        let selected = clock.day(day)
+        guard selected < clock.today(now),
+              tasks.contains(where: { $0.id == id && $0.habitGoal != nil }) else { return false }
+        // Corrections update the habit calendar, while ToDo history keeps the original actions.
+        let key = FlowHabitRecord.Key(taskID: id, day: selected)
+        habitDays.removeAll { $0.key == key }
+        if let outcome { habitDays.append(FlowHabitRecord(taskID: id, day: selected, outcome: outcome)) }
+        return true
+    }
+
+    @discardableResult
     mutating func markHabit(_ id: UUID, outcome: FlowHabitOutcome, now: Date, clock: FlowClock) -> Bool {
         let today = clock.today(now)
         let key = FlowHabitRecord.Key(taskID: id, day: today)
@@ -47,6 +60,7 @@ extension FlowData {
         }
         tasks[index].day = next
         tasks[index].originDay = nil
+        tasks[index].plannedDay = nil
         tasks[index].checklist = task.checklist.map {
             var item = $0
             item.isDone = false

@@ -2,14 +2,21 @@ import SwiftUI
 
 @main @MainActor struct LifeFlowApp: App {
     @StateObject private var store = FlowStore()
+    @State private var tab = 0
+    @State private var widgetTask: UUID?
     @Environment(\.scenePhase) private var phase
     private let timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
     var body: some Scene {
         WindowGroup {
-            TabView {
-                FlowHome().tabItem { Label("ToDo", systemImage: "checklist") }
-                FlowGoalsView().tabItem { Label("年間目標", systemImage: "target") }
+            TabView(selection: $tab) {
+                FlowHome(widgetTask: $widgetTask).tabItem { Label("ToDo", systemImage: "checklist") }.tag(0)
+                FlowGoalsView().tabItem { Label("年間目標", systemImage: "target") }.tag(1)
             }.environmentObject(store)
+                .onOpenURL { url in
+                    guard let route = FlowWidgetRoute(url) else { return }
+                    tab = 0
+                    widgetTask = route.taskID
+                }
                 .tint(FlowTheme.action)
                 .preferredColorScheme(.light)
                 .onChange(of: phase) { if $0 == .active { opened() } }
@@ -28,11 +35,16 @@ import SwiftUI
         store.reminders.markOpened(now: Date(), clock: store.clock, tasks: store.data.tasks)
         store.roll()
         store.reminders.update(store.data.tasks)
+        store.refreshWidget()
     }
 }
 struct FlowHome: View {
     @EnvironmentObject var store: FlowStore
     @Environment(\.scenePhase) private var phase
+    @Binding var widgetTask: UUID?
+    @State private var deadlineTask: FlowTask?
+    @State private var deadlineDraft = Date()
+    @State private var showingOrder = false
     @State private var favoritesOnly = false
     @State private var now = Date()
     @State private var showingHelp = false
@@ -49,7 +61,7 @@ struct FlowHome: View {
     @State private var pending: Data?
     private let timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
     var taskList: FlowTaskList {
-        FlowTaskList(tasks: store.data.tasks, query: "", category: categoryFilter, now: now, clock: store.clock)
+        FlowTaskList(tasks: store.data.tasks, query: "", category: categoryFilter, now: now, clock: store.clock, todayOrder: store.data.todayOrder ?? [])
     }
     var categories: [String] {
         let registered = store.data.registeredCategories
@@ -87,7 +99,7 @@ struct FlowHome: View {
                     ForEach(completed) { completedRow($0) }
                 }
                 let upcoming = favoritesOnly ? taskList.favorites : taskList.all
-                let later = upcoming.filter { $0.day > store.clock.today(now) }
+                let later = upcoming.filter { !$0.belongsToToday(store.clock.today(now), clock: store.clock) }
                 if !later.isEmpty {
                     Section("今後の予定") {
                         ForEach(later) { taskRow($0) }
@@ -107,6 +119,9 @@ struct FlowHome: View {
                     }
                 }
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    Button { showingOrder = true } label: {
+                        Image(systemName: "line.3.horizontal").accessibilityLabel("今日のToDoを並び替え")
+                    }.accessibilityIdentifier("today-reorder").disabled(!store.ready)
                     Button { favoritesOnly.toggle() } label: {
                         Image(systemName: favoritesOnly ? "star.fill" : "star").foregroundStyle(FlowTheme.star)
                             .accessibilityLabel(favoritesOnly ? "すべてのToDoを表示" : "お気に入りを表示")
@@ -116,6 +131,11 @@ struct FlowHome: View {
                         Button("ToDoを検索") { showingSearch = true }
                         Button("通知設定") { showingNotifications = true }
                         Button("カテゴリを管理") { showingCategoryButtons = true }
+                        if store.widgetEnabled {
+                            Toggle("ウィジェットにToDo名を表示", isOn: Binding(
+                                get: { store.widgetShowsTitles }, set: { store.setWidgetShowsTitles($0) }
+                            ))
+                        }
                         Divider()
                         Button("JSONバックアップを書き出す") {
                             do { document = BackupDocument(bytes: try FlowStore.encode(store.data)); exporter = true }
@@ -127,6 +147,52 @@ struct FlowHome: View {
                         Image(systemName: "plus.circle.fill").foregroundStyle(FlowTheme.accent)
                             .accessibilityLabel("ToDoを追加")
                     }.disabled(!store.ready)
+                }
+            }
+            .onChange(of: widgetTask) { _ in openWidgetTask() }
+            .onAppear { openWidgetTask() }
+            .sheet(isPresented: $showingOrder) {
+                NavigationStack {
+                    List {
+                        let pending = favoritesOnly ? taskList.today.filter(\.favorite) : taskList.today
+                        let completed = Set(store.data.completedToday(now: now, clock: store.clock).map(\.taskID))
+                        let visible = pending.filter { !completed.contains($0.id) }
+                        ForEach(visible) { task in
+                            Text(task.title).accessibilityIdentifier("reorder:" + task.title)
+                        }
+                        .onMove { sources, destination in
+                            let ids = visible.map(\.id)
+                            var reordered = ids
+                            reordered.move(fromOffsets: sources, toOffset: destination)
+                            store.reorderToday(ids, to: reordered)
+                        }
+                        if visible.isEmpty { Text("並び替えられるToDoはありません").foregroundStyle(.secondary) }
+                    }
+                    .environment(\.editMode, .constant(.active))
+                    .flowScreen()
+                    .navigationTitle("今日のToDoを並び替え")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) { Button("完了") { showingOrder = false } }
+                    }
+                }
+            }
+            .sheet(item: $deadlineTask) { task in
+                NavigationStack {
+                    Form { DatePicker("締切日", selection: $deadlineDraft, displayedComponents: .date) }
+                        .navigationTitle("締切日を変更")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("キャンセル") { deadlineTask = nil }
+                            }
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("変更") {
+                                    store.changeDeadline(task.id, to: deadlineDraft)
+                                    deadlineTask = nil
+                                }
+                            }
+                        }
                 }
             }
             .sheet(isPresented: $showingHelp) { FlowHelp() }
@@ -165,6 +231,45 @@ struct FlowHome: View {
             .onAppear { now = Date() }
         }
     }
+    private func openWidgetTask() {
+        guard let id = widgetTask else { return }
+        widgetTask = nil
+        if let task = store.data.tasks.first(where: { $0.id == id }) { editing = task }
+    }
+
+    private func taskScheduleMenu(_ task: FlowTask) -> some View {
+        let today = store.clock.today()
+        let isPlanned = task.isPlannedToday(today, clock: store.clock)
+        return Menu {
+            Button(isPlanned ? "「今日やる」を解除" : "今日やる予定に追加") {
+                store.planToday(task.id, enabled: !isPlanned)
+            }
+            Menu("締切日を変更") {
+                Button("今日") { store.changeDeadline(task.id, to: today) }
+                Button("明日") {
+                    if let date = store.clock.calendar.date(byAdding: .day, value: 1, to: today) {
+                        store.changeDeadline(task.id, to: date)
+                    }
+                }
+                Button("来週（7日後）") {
+                    if let date = store.clock.calendar.date(byAdding: .day, value: 7, to: today) {
+                        store.changeDeadline(task.id, to: date)
+                    }
+                }
+                Button("日付指定") {
+                    deadlineDraft = task.deadline
+                    deadlineTask = task
+                }
+            }
+        } label: {
+            Image(systemName: "calendar").frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel("予定と締切の操作")
+        .accessibilityIdentifier("schedule:" + task.title)
+    }
+
     private var selectedCategory: String? {
         if case .named(let name) = categoryFilter { return name }
         return nil
@@ -286,6 +391,10 @@ struct FlowHome: View {
                         Text(task.title).font(.headline).fixedSize(horizontal: false, vertical: true).foregroundStyle(task.originDay == nil ? FlowTheme.ink : Color.red)
                         Text(store.clock.label(task.deadline)).font(.caption).foregroundStyle(.secondary)
                         deadlineStatus(task)
+                        if task.isPlannedToday(store.clock.today(now), clock: store.clock) {
+                            Label("今日やる", systemImage: "calendar").font(.caption)
+                                .foregroundStyle(FlowTheme.action)
+                        }
                         if let block {
                             Text(block.message).font(.caption).foregroundStyle(.secondary)
                         }
@@ -321,6 +430,7 @@ struct FlowHome: View {
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }.accessibilityLabel(task.favorite ? "お気に入りから外す" : "お気に入りに追加")
+                if task.habitGoal == nil { taskScheduleMenu(task) }
                 Spacer(minLength: 4)
                 Button { store.resolve(task, .failed) } label: {
                     Label("失敗", systemImage: "xmark")

@@ -25,6 +25,7 @@ struct FlowTask: Identifiable, Codable, Equatable {
     var goalStepID: UUID? = nil
     var habitGoal: Int? = nil
     var muteReminder: Bool? = nil
+    var plannedDay: Date? = nil
 
     var deadline: Date { habitGoal == nil ? originDay ?? day : day }
 }
@@ -57,6 +58,7 @@ struct FlowData: Codable {
     var categoryButtons: [String]? = nil
     var goals: [FlowGoal]? = nil
     var habitRecords: [FlowHabitRecord]? = nil
+    var todayOrder: [UUID]? = nil
     func validated() throws -> FlowData {
         guard (1...Self.currentSchema).contains(schemaVersion), Set(tasks.map(\.id)).count == tasks.count,
               Set(history.map(\.id)).count == history.count,
@@ -78,6 +80,11 @@ struct FlowData: Codable {
         guard Set(goalStepIDs).count == goalStepIDs.count else { throw FlowError.invalidBackup }
         var upgraded = self
         upgraded.schemaVersion = Self.currentSchema
+        if let todayOrder {
+            let active = Set(tasks.map(\.id) + history.compactMap { $0.completionUndo?.original.id })
+            var seen = Set<UUID>()
+            upgraded.todayOrder = todayOrder.filter { active.contains($0) && seen.insert($0).inserted }
+        }
         for i in upgraded.tasks.indices { upgraded.tasks[i].category = FlowCategories.normalized(upgraded.tasks[i].category) }
         for i in upgraded.history.indices { upgraded.history[i].category = FlowCategories.normalized(upgraded.history[i].category) }
         let buttons = categoryButtons ?? Array(FlowCategories.names(upgraded.tasks.map(\.category) + upgraded.history.map(\.category)).prefix(30))
@@ -326,6 +333,7 @@ extension FlowData {
             tasks[i].repeatAnchorWeekday = task.repeatAnchorWeekday ?? clock.calendar.component(.weekday, from: task.day)
             tasks[i].day = next
             tasks[i].originDay = nil
+            tasks[i].plannedDay = nil
             tasks[i].checklist = task.checklist.map { item in var reset = item; reset.isDone = false; return reset }
         } else { tasks.remove(at: i) }
         if outcome == .completed { saveCompletionUndo(original: task) }
@@ -382,6 +390,9 @@ extension FlowData {
         var remainingCarries = maxCarries
         let loggedToday = Set(habitDays.filter { $0.day == today }.map(\.taskID))
         for i in tasks.indices {
+            if let planned = tasks[i].plannedDay, clock.day(planned) < today {
+                tasks[i].plannedDay = nil
+            }
             if tasks[i].habitGoal != nil {
                 if tasks[i].day <= today {
                     if loggedToday.contains(tasks[i].id),

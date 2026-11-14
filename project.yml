@@ -7,11 +7,16 @@ settings:
   base:
     SWIFT_VERSION: '5.0'
     TARGETED_DEVICE_FAMILY: '1'
+    MARKETING_VERSION: '0.9.5'
+    CURRENT_PROJECT_VERSION: '14'
 targets:
   LifeFlow:
     type: application
     platform: iOS
     sources: [Sources]
+    dependencies:
+      - target: LifeFlowWidget
+        embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: local.private.lifeflow
@@ -19,8 +24,8 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: LifeFlow
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
-        MARKETING_VERSION: '0.9.4'
-        CURRENT_PROJECT_VERSION: '13'
+        CODE_SIGN_ENTITLEMENTS: Configuration/Widget.entitlements
+        INFOPLIST_FILE: Configuration/LifeFlow.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     scheme:
       testTargets:
@@ -36,3 +41,17 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TEST_TARGET_NAME: LifeFlow
 
+  LifeFlowWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Widget
+        excludes: [Info.plist]
+      - path: Sources/Core
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.private.lifeflow.widget
+        INFOPLIST_FILE: Widget/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Configuration/Widget.entitlements
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES

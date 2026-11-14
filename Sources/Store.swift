@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import WidgetKit
 
 struct BackupDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.json] }
@@ -12,6 +13,10 @@ struct BackupDocument: FileDocument {
     @Published private(set) var data = FlowData()
     @Published var error: String?
     @Published private(set) var ready = false
+    @Published private(set) var widgetShowsTitles = UserDefaults.standard.bool(forKey: "widgetShowsTitles")
+    private var widgetSnapshot: FlowWidgetSnapshot?
+    private var widgetDay: Date?
+    var widgetEnabled: Bool { FlowWidgetContainer.file != nil }
     let clock = FlowClock()
     let reminders = FlowReminders()
     private let url: URL
@@ -52,7 +57,7 @@ struct BackupDocument: FileDocument {
                     FlowTask(title: "A Normal", day: today),
                     FlowTask(title: "B Daily", day: today, repeatRule: .daily),
                     FlowTask(title: "C Habit", day: today, category: "習慣", habitGoal: 3),
-                    FlowTask(title: "D Future", day: tomorrow)
+                    FlowTask(id: UUID(uuidString: "EF6A4AF5-6253-4D4D-B67B-9DC9BFE33F50")!, title: "D Future", day: tomorrow)
                 ])
                 try Self.encode(fixture).write(to: url, options: [.atomic, .completeFileProtection])
             }
@@ -101,6 +106,7 @@ struct BackupDocument: FileDocument {
             needsMigrationCopy = false
             data = validated; ready = true; error = nil
             reminders.update(data.tasks)
+            refreshWidget()
             return true
         } catch { self.error = "保存できませんでした。変更は反映していません。\n\(error.localizedDescription)"; return false }
     }
@@ -112,6 +118,7 @@ struct BackupDocument: FileDocument {
             return
         }
         if next.tasks != data.tasks { commit(next) }
+        else if widgetDay != clock.today() { refreshWidget() }
     }
     @discardableResult func save(_ task: FlowTask) -> Bool {
         var next = data
@@ -183,6 +190,57 @@ struct BackupDocument: FileDocument {
     func addGoalStepToToday(_ stepID: UUID, goalID: UUID) -> Bool {
         guard let task = data.todoForGoalStep(stepID, goalID: goalID, today: clock.today()) else { return false }
         return save(task)
+    }
+
+    func setWidgetShowsTitles(_ value: Bool) {
+        widgetShowsTitles = value
+        UserDefaults.standard.set(value, forKey: "widgetShowsTitles")
+        refreshWidget()
+    }
+
+    func refreshWidget() {
+        #if DEBUG && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.environment["LIFEFLOW_UI_TEST_STORE"] != nil { return }
+        #endif
+        guard ready, let file = FlowWidgetContainer.file else { return }
+        let now = Date()
+        let snapshot = FlowWidgetSnapshot(data: data, now: now, clock: clock, showTitles: widgetShowsTitles)
+        if snapshot == widgetSnapshot { return }
+        do {
+            try JSONEncoder().encode(snapshot).write(to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            widgetSnapshot = snapshot
+            widgetDay = clock.today(now)
+        } catch {
+            // If a refresh fails, do not leave previously shared task names behind.
+            try? FileManager.default.removeItem(at: file)
+            widgetSnapshot = nil
+        }
+        WidgetCenter.shared.reloadTimelines(ofKind: FlowWidgetContainer.kind)
+    }
+
+    func planToday(_ id: UUID, enabled: Bool) {
+        var next = data
+        if next.setPlannedToday(id, enabled: enabled, now: Date(), clock: clock) { commit(next) }
+    }
+
+    func changeDeadline(_ id: UUID, to date: Date) {
+        var next = data
+        guard next.changeDeadline(id, to: date, clock: clock) else { return }
+        guard next.rollover(now: Date(), clock: clock, maxCarries: Self.maxCarriesPerWrite) else {
+            error = "期限を変更できませんでした。"
+            return
+        }
+        commit(next)
+    }
+
+    func reorderToday(_ visible: [UUID], to reordered: [UUID]) {
+        var next = data
+        if next.reorderToday(visible, to: reordered, now: Date(), clock: clock) { commit(next) }
+    }
+
+    func editPastHabit(_ id: UUID, day: Date, outcome: FlowHabitOutcome?) {
+        var next = data
+        if next.editPastHabit(id, day: day, outcome: outcome, now: Date(), clock: clock) { commit(next) }
     }
 
     func restHabit(_ id: UUID) {

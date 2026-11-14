@@ -28,6 +28,7 @@ struct FlowHabitDetail: View {
     @State private var monthly = true
     @State private var offset = 0
     @State private var selectedDay: Date?
+    @State private var showingEdit = false
 
     private var calendar: FlowHabitCalendar {
         FlowHabitCalendar(taskID: taskID, days: store.data.habitDays, now: now, clock: store.clock)
@@ -53,6 +54,15 @@ struct FlowHabitDetail: View {
         }
         .flowScreen()
         .onReceive(timer) { now = $0 }
+        .confirmationDialog("過去の習慣記録を変更", isPresented: $showingEdit, titleVisibility: .visible, presenting: selectedDay) { day in
+            Button("達成") { store.editPastHabit(taskID, day: day, outcome: .completed) }
+            Button("失敗") { store.editPastHabit(taskID, day: day, outcome: .failed) }
+            Button("休養") { store.editPastHabit(taskID, day: day, outcome: .rest) }
+            Button("未記録") { store.editPastHabit(taskID, day: day, outcome: nil) }
+            Button("キャンセル", role: .cancel) {}
+        } message: { day in
+            Text(store.clock.label(day))
+        }
         .navigationTitle("習慣の詳細")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -87,6 +97,7 @@ struct FlowHabitDetail: View {
                     .font(.caption).foregroundStyle(.secondary)
                 if let selectedDay {
                     Text(store.clock.label(selectedDay) + "・" + status(selectedDay)).font(.footnote)
+                        .accessibilityIdentifier("habit-selected-record")
                 }
             }
         }
@@ -100,7 +111,10 @@ struct FlowHabitDetail: View {
             ForEach(Array("月火水木金土日"), id: \.self) { Text(String($0)).font(.caption2) }
             ForEach(0..<leading, id: \.self) { _ in Color.clear.frame(height: 26) }
             ForEach(calendar.days(in: interval), id: \.self) { day in
-                Button { selectedDay = day } label: {
+                Button {
+                    selectedDay = day
+                    if day < store.clock.today() { showingEdit = true }
+                } label: {
                     VStack(spacing: 4) {
                         Text(String(store.clock.calendar.component(.day, from: day)))
                             .font(.caption2).minimumScaleFactor(0.65).lineLimit(1)
@@ -109,6 +123,7 @@ struct FlowHabitDetail: View {
                     }.frame(maxWidth: .infinity, minHeight: 36)
                 }.buttonStyle(.borderless)
                     .accessibilityLabel(store.clock.label(day) + "・" + status(day))
+                    .accessibilityIdentifier("habit-day-" + String(Int(day.timeIntervalSince1970)))
             }
         }
     }
