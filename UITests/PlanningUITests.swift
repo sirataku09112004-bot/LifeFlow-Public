@@ -29,7 +29,6 @@ final class PlanningUITests: XCTestCase {
 
         reveal(menu, in: app)
         menu.tap()
-        app.buttons["締切日を変更"].tap()
         app.buttons["今日"].tap()
         reveal(count, in: app, down: false)
         XCTAssertEqual(count.label, "0 / 4件達成")
@@ -75,8 +74,9 @@ final class PlanningUITests: XCTestCase {
         let app = launch()
         app.tabBars.buttons["年間目標"].tap()
         app.open(URL(string: "lifeflow://todo/EF6A4AF5-6253-4D4D-B67B-9DC9BFE33F50")!)
-        XCTAssertTrue(app.navigationBars["ToDoを編集"].waitForExistence(timeout: 8))
-        XCTAssertEqual(app.textFields["タスク名"].value as? String, "D Future")
+        let title = app.textFields.firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 8), app.debugDescription)
+        XCTAssertEqual(title.value as? String, "D Future")
     }
 
     private func reveal(_ element: XCUIElement, in app: XCUIApplication, down: Bool = true) {

@@ -3,19 +3,22 @@ import SwiftUI
 @main @MainActor struct LifeFlowApp: App {
     @StateObject private var store = FlowStore()
     @State private var tab = 0
-    @State private var widgetTask: UUID?
+    @State private var linkedTask: FlowTask?
     @Environment(\.scenePhase) private var phase
     private let timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
     var body: some Scene {
         WindowGroup {
             TabView(selection: $tab) {
-                FlowHome(widgetTask: $widgetTask).tabItem { Label("ToDo", systemImage: "checklist") }.tag(0)
+                FlowHome().tabItem { Label("ToDo", systemImage: "checklist") }.tag(0)
                 FlowGoalsView().tabItem { Label("年間目標", systemImage: "target") }.tag(1)
             }.environmentObject(store)
                 .onOpenURL { url in
                     guard let route = FlowWidgetRoute(url) else { return }
                     tab = 0
-                    widgetTask = route.taskID
+                    linkedTask = store.data.tasks.first { $0.id == route.taskID }
+                }
+                .sheet(item: $linkedTask) { task in
+                    TaskEditor(task: task).environmentObject(store)
                 }
                 .tint(FlowTheme.action)
                 .preferredColorScheme(.light)
@@ -41,9 +44,7 @@ import SwiftUI
 struct FlowHome: View {
     @EnvironmentObject var store: FlowStore
     @Environment(\.scenePhase) private var phase
-    @Binding var widgetTask: UUID?
-    @State private var deadlineTask: FlowTask?
-    @State private var deadlineDraft = Date()
+    @State private var scheduleTask: FlowTask?
     @State private var showingOrder = false
     @State private var favoritesOnly = false
     @State private var now = Date()
@@ -149,8 +150,9 @@ struct FlowHome: View {
                     }.disabled(!store.ready)
                 }
             }
-            .onChange(of: widgetTask) { _ in openWidgetTask() }
-            .onAppear { openWidgetTask() }
+            .sheet(item: $scheduleTask) { task in
+                TaskScheduleSheet(task: task)
+            }
             .sheet(isPresented: $showingOrder) {
                 NavigationStack {
                     List {
@@ -175,24 +177,6 @@ struct FlowHome: View {
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) { Button("完了") { showingOrder = false } }
                     }
-                }
-            }
-            .sheet(item: $deadlineTask) { task in
-                NavigationStack {
-                    Form { DatePicker("締切日", selection: $deadlineDraft, displayedComponents: .date) }
-                        .navigationTitle("締切日を変更")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .cancellationAction) {
-                                Button("キャンセル") { deadlineTask = nil }
-                            }
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("変更") {
-                                    store.changeDeadline(task.id, to: deadlineDraft)
-                                    deadlineTask = nil
-                                }
-                            }
-                        }
                 }
             }
             .sheet(isPresented: $showingHelp) { FlowHelp() }
@@ -231,41 +215,14 @@ struct FlowHome: View {
             .onAppear { now = Date() }
         }
     }
-    private func openWidgetTask() {
-        guard let id = widgetTask else { return }
-        widgetTask = nil
-        if let task = store.data.tasks.first(where: { $0.id == id }) { editing = task }
-    }
-
     private func taskScheduleMenu(_ task: FlowTask) -> some View {
-        let today = store.clock.today()
-        let isPlanned = task.isPlannedToday(today, clock: store.clock)
-        return Menu {
-            Button(isPlanned ? "「今日やる」を解除" : "今日やる予定に追加") {
-                store.planToday(task.id, enabled: !isPlanned)
-            }
-            Menu("締切日を変更") {
-                Button("今日") { store.changeDeadline(task.id, to: today) }
-                Button("明日") {
-                    if let date = store.clock.calendar.date(byAdding: .day, value: 1, to: today) {
-                        store.changeDeadline(task.id, to: date)
-                    }
-                }
-                Button("来週（7日後）") {
-                    if let date = store.clock.calendar.date(byAdding: .day, value: 7, to: today) {
-                        store.changeDeadline(task.id, to: date)
-                    }
-                }
-                Button("日付指定") {
-                    deadlineDraft = task.deadline
-                    deadlineTask = task
-                }
-            }
-        } label: {
-            Image(systemName: "calendar").frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+        Button { scheduleTask = task } label: {
+            Image(systemName: "calendar")
+                .frame(width: 44, height: 44)
+                .background(FlowTheme.card)
+                .contentShape(.interaction, Rectangle())
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.plain)
         .accessibilityLabel("予定と締切の操作")
         .accessibilityIdentifier("schedule:" + task.title)
     }
