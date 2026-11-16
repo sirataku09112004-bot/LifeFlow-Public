@@ -20,8 +20,14 @@ final class WidgetTaskActionTests: XCTestCase {
                                                   data: completed, now: now, clock: clock))
 
         let tomorrow = date("2026-11-17T04:00:00")
-        XCTAssertNil(FlowWidgetTaskAction.complete(task.id, occurrenceDay: completed.tasks[0].day,
+        XCTAssertNil(FlowWidgetTaskAction.complete(task.id, occurrenceDay: task.day,
                                                    data: completed, now: tomorrow, clock: clock))
+        let nextOccurrence = try XCTUnwrap(FlowWidgetTaskAction.complete(
+            task.id, occurrenceDay: completed.tasks[0].day, data: completed, now: tomorrow, clock: clock
+        ))
+        XCTAssertEqual(nextOccurrence.history.filter { $0.outcome == .completed && $0.taskID == task.id }.count, 2)
+        XCTAssertNil(FlowWidgetTaskAction.complete(task.id, occurrenceDay: completed.tasks[0].day,
+                                                  data: nextOccurrence, now: tomorrow, clock: clock))
     }
 
     func testWidgetActionRecordsHabitAndRejectsStaleOccurrence() throws {
