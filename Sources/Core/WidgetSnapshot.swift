@@ -4,6 +4,13 @@ struct FlowWidgetDay: Codable, Equatable {
     struct Task: Codable, Equatable, Identifiable {
         let id: UUID
         let title: String
+        let occurrenceDay: Date?
+
+        init(id: UUID, title: String, occurrenceDay: Date? = nil) {
+            self.id = id
+            self.title = title
+            self.occurrenceDay = occurrenceDay
+        }
     }
 
     let day: Date
@@ -36,8 +43,8 @@ struct FlowWidgetSnapshot: Codable, Equatable {
                                              now: date, clock: clock, category: .all, favoritesOnly: false)
             entries.append(FlowWidgetDay(day: day, remaining: pending.count, percent: progress.percent,
                                          titlesVisible: showTitles,
-                                         tasks: showTitles ? pending.prefix(3).map {
-                                             FlowWidgetDay.Task(id: $0.id, title: $0.title)
+                                         tasks: showTitles ? pending.prefix(4).map {
+                                             FlowWidgetDay.Task(id: $0.id, title: $0.title, occurrenceDay: $0.day)
                                          } : []))
         }
         days = entries

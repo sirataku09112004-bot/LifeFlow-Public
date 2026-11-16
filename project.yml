@@ -7,8 +7,8 @@ settings:
   base:
     SWIFT_VERSION: '5.0'
     TARGETED_DEVICE_FAMILY: '1'
-    MARKETING_VERSION: '0.9.6'
-    CURRENT_PROJECT_VERSION: '15'
+    MARKETING_VERSION: '0.9.7'
+    CURRENT_PROJECT_VERSION: '16'
 targets:
   LifeFlow:
     type: application
@@ -48,6 +48,7 @@ targets:
       - path: Widget
         excludes: [Info.plist]
       - path: Sources/Core
+      - path: Sources/WidgetTaskIntent.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: local.private.lifeflow.widget

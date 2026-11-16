@@ -20,23 +20,39 @@ struct BackupDocument: FileDocument {
     let clock = FlowClock()
     let reminders = FlowReminders()
     private let url: URL
+    private let usesSharedDataFile: Bool
     private var needsMigrationCopy = false
     private static let maxDataBytes = 20 * 1024 * 1024
     private static let maxCarriesPerWrite = 10_000
     private struct SchemaHeader: Decodable { let schemaVersion: Int }
     init() {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        var directory = support.appendingPathComponent("LifeFlow", isDirectory: true)
+        let legacyURL = support.appendingPathComponent("LifeFlow", isDirectory: true)
+            .appendingPathComponent("lifeflow.json")
+        let sharedURL = FlowWidgetContainer.dataFile
         #if DEBUG && targetEnvironment(simulator)
         let fixtureID = ProcessInfo.processInfo.environment["LIFEFLOW_UI_TEST_STORE"].flatMap(UUID.init(uuidString:))
         if let fixtureID {
-            directory = support.appendingPathComponent("LifeFlowUITests", isDirectory: true)
+            let fixtureDirectory = support.appendingPathComponent("LifeFlowUITests", isDirectory: true)
                 .appendingPathComponent(fixtureID.uuidString, isDirectory: true)
+            url = fixtureDirectory.appendingPathComponent("lifeflow.json")
+            usesSharedDataFile = false
+        } else {
+            url = sharedURL ?? legacyURL
+            usesSharedDataFile = sharedURL != nil
         }
+        #else
+        url = sharedURL ?? legacyURL
+        usesSharedDataFile = sharedURL != nil
         #endif
-        url = directory.appendingPathComponent("lifeflow.json")
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            // Keep the old private file intact and copy it only once into the app group.
+            if usesSharedDataFile, !FileManager.default.fileExists(atPath: url.path),
+               FileManager.default.fileExists(atPath: legacyURL.path) {
+                let oldBytes = try Data(contentsOf: legacyURL)
+                try FlowWidgetSharedDataFile.writeData(oldBytes, to: url, sharedGroup: true)
+            }
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-lifeflow-preview") {
                 let today = clock.today()
@@ -66,7 +82,7 @@ struct BackupDocument: FileDocument {
                 if let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > Self.maxDataBytes {
                     throw FlowError.invalidBackup
                 }
-                let bytes = try Data(contentsOf: url)
+                let bytes = try FlowWidgetSharedDataFile.readData(from: url)
                 data = try Self.decode(bytes)
                 needsMigrationCopy = try JSONDecoder().decode(SchemaHeader.self, from: bytes).schemaVersion < FlowData.currentSchema
             }
@@ -102,7 +118,7 @@ struct BackupDocument: FileDocument {
                 try FileManager.default.copyItem(at: url, to: safety)
                 try FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: safety.path)
             }
-            try bytes.write(to: url, options: [.atomic, .completeFileProtection])
+            try FlowWidgetSharedDataFile.writeData(bytes, to: url, sharedGroup: usesSharedDataFile)
             needsMigrationCopy = false
             data = validated; ready = true; error = nil
             reminders.update(data.tasks)
@@ -207,7 +223,7 @@ struct BackupDocument: FileDocument {
         let snapshot = FlowWidgetSnapshot(data: data, now: now, clock: clock, showTitles: widgetShowsTitles)
         if snapshot == widgetSnapshot { return }
         do {
-            try JSONEncoder().encode(snapshot).write(to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            try FlowWidgetSharedDataFile.writeData(JSONEncoder().encode(snapshot), to: file, sharedGroup: true)
             widgetSnapshot = snapshot
             widgetDay = clock.today(now)
         } catch {
@@ -216,6 +232,19 @@ struct BackupDocument: FileDocument {
             widgetSnapshot = nil
         }
         WidgetCenter.shared.reloadTimelines(ofKind: FlowWidgetContainer.kind)
+    }
+
+    func synchronizeFromSharedStore() {
+        guard ready, usesSharedDataFile else { return }
+        do {
+            let latest = try FlowWidgetSharedDataFile.read(from: url)
+            data = latest
+            error = nil
+            reminders.update(data.tasks)
+            refreshWidget()
+        } catch {
+            self.error = "共有データを読み込めませんでした。元ファイルは保護されています。\n\(error.localizedDescription)"
+        }
     }
 
     func planToday(_ id: UUID, enabled: Bool) {

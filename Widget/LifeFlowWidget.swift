@@ -52,46 +52,26 @@ private struct TodayWidgetView: View {
     }
 
     private var content: some View {
-        VStack(alignment: .leading, spacing: family == .systemSmall ? 4 : 5) {
+        VStack(alignment: .leading, spacing: family == .systemSmall ? 4 : 2) {
             Text("今日のToDo")
-                .font(family == .systemSmall ? .subheadline.weight(.bold) : .headline)
+                .font(family == .systemSmall ? .subheadline.weight(.bold) : .caption.weight(.bold))
                 .foregroundStyle(ink)
             if let day = entry.day {
-                Text(family == .systemSmall
-                     ? "残り \(day.remaining)件 · \(day.percent)%達成"
-                     : "残り \(day.remaining)件・達成率 \(day.percent)%")
-                    .font(family == .systemSmall ? .caption2 : .subheadline)
+                Text("残り \(day.remaining)件 · \(day.percent)%達成")
+                    .font(.caption2)
                     .foregroundStyle(ink)
                 ProgressView(value: Double(day.percent), total: 100)
                     .tint(accent)
                     .accessibilityLabel("今日の達成率 \(day.percent)%")
                 if day.titlesVisible {
-                    let visibleTasks = Array(day.tasks.prefix(family == .systemSmall ? 2 : 3))
+                    let visibleTasks = Array(day.tasks.prefix(family == .systemSmall ? 2 : 4))
                     if visibleTasks.isEmpty {
                         Text(day.remaining == 0 ? "今日のタスクはありません" : "今日のタスクを読み込み中")
                             .font(.caption2)
                             .foregroundStyle(ink)
                     } else {
                         ForEach(visibleTasks) { task in
-                            Link(destination: FlowWidgetRoute.url(for: task.id)) {
-                                HStack(alignment: .top, spacing: 5) {
-                                    Image(systemName: "circle")
-                                        .font(.system(size: 10, weight: .medium))
-                                        .foregroundStyle(accent)
-                                        .padding(.top, 1)
-                                    Text(task.title)
-                                        .font(family == .systemSmall ? .caption2.weight(.medium) : .caption.weight(.medium))
-                                        .foregroundStyle(ink)
-                                        .lineLimit(family == .systemSmall ? 2 : 1)
-                                        .multilineTextAlignment(.leading)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, family == .systemSmall ? 4 : 5)
-                                .background(Color.white, in: RoundedRectangle(cornerRadius: 7))
-                            }
-                            .privacySensitive()
+                            taskRow(task)
                         }
                     }
                 } else {
@@ -108,6 +88,53 @@ private struct TodayWidgetView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .widgetURL(FlowWidgetRoute.url())
+    }
+
+    private func taskRow(_ task: FlowWidgetDay.Task) -> some View {
+        HStack(spacing: 3) {
+            completionButton(for: task)
+            Link(destination: FlowWidgetRoute.url(for: task.id)) {
+                Text(task.title)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(ink)
+                    .lineLimit(family == .systemSmall ? 2 : 1)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+        }
+        .frame(minWidth: 0, maxWidth: .infinity,
+               minHeight: family == .systemSmall ? 28 : 20,
+               maxHeight: family == .systemSmall ? 34 : 22, alignment: .leading)
+        .padding(.horizontal, 4)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 6))
+        .privacySensitive()
+    }
+
+    @ViewBuilder
+    private func completionButton(for task: FlowWidgetDay.Task) -> some View {
+        if #available(iOS 17.0, *), let occurrenceDay = task.occurrenceDay {
+            Button(intent: CompleteWidgetTaskIntent(taskID: task.id, occurrenceDay: occurrenceDay)) {
+                Image(systemName: "circle")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(accent)
+                    .frame(width: family == .systemSmall ? 28 : 24,
+                           height: family == .systemSmall ? 28 : 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("「\(task.title)」を達成")
+        } else {
+            Link(destination: FlowWidgetRoute.url(for: task.id)) {
+                Image(systemName: "circle")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(accent)
+                    .frame(width: family == .systemSmall ? 28 : 24,
+                           height: family == .systemSmall ? 28 : 20)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("LifeFlowでタスクを開く")
+        }
     }
 }
 

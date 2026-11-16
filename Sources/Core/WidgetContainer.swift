@@ -16,6 +16,10 @@ enum FlowWidgetContainer {
             FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0)
         }.first?.appendingPathComponent(fileName)
     }
+
+    static var dataFile: URL? {
+        file?.deletingLastPathComponent().appendingPathComponent("lifeflow.shared.json")
+    }
     #endif
 }
 

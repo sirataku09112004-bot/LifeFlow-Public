@@ -35,6 +35,7 @@ import SwiftUI
 
     private func opened() {
         guard store.ready else { return }
+        store.synchronizeFromSharedStore()
         store.reminders.markOpened(now: Date(), clock: store.clock, tasks: store.data.tasks)
         store.roll()
         store.reminders.update(store.data.tasks)

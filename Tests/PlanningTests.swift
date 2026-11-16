@@ -121,7 +121,8 @@ final class PlanningTests: XCTestCase {
 
         let visible = FlowWidgetSnapshot(data: data, now: now, clock: clock, showTitles: true)
         let today = try XCTUnwrap(visible.entry(now: now, clock: clock))
-        XCTAssertEqual(today.tasks.map(\.title), ["表示するタスク 1", "表示するタスク 2", "表示するタスク 3"])
+        XCTAssertEqual(today.tasks.map(\.title), ["表示するタスク 1", "表示するタスク 2", "表示するタスク 3", "表示するタスク 4"])
+        XCTAssertEqual(today.tasks.first?.occurrenceDay, clock.today(now))
 
         let hidden = FlowWidgetSnapshot(data: data, now: now, clock: clock, showTitles: false)
         let hiddenToday = try XCTUnwrap(hidden.entry(now: now, clock: clock))
