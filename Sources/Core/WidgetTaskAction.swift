@@ -60,8 +60,8 @@ enum FlowWidgetSharedDataFile {
             do {
                 try bytes.write(to: coordinatedURL, options: .atomic)
                 let protection: FileProtectionType = sharedGroup
-                    ? .completeFileProtectionUntilFirstUserAuthentication
-                    : .completeFileProtection
+                    ? .completeUntilFirstUserAuthentication
+                    : .complete
                 try FileManager.default.setAttributes([.protectionKey: protection],
                                                       ofItemAtPath: coordinatedURL.path)
             } catch {
