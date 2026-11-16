@@ -39,37 +39,70 @@ private struct TodayProvider: TimelineProvider {
 private struct TodayWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let entry: TodayEntry
-    private let accent = Color(red: 0.10, green: 0.45, blue: 0.67)
+    private let accent = Color(red: 0.04, green: 0.37, blue: 0.60)
+    private let ink = Color(red: 0.09, green: 0.16, blue: 0.22)
+    private let canvas = Color(red: 0.92, green: 0.97, blue: 1.0)
 
     var body: some View {
         if #available(iOS 17.0, *) {
-            content.containerBackground(Color(red: 0.94, green: 0.98, blue: 1), for: .widget)
+            content.containerBackground(canvas, for: .widget)
         } else {
-            content.padding(12).background(Color(red: 0.94, green: 0.98, blue: 1))
+            content.padding(12).background(canvas)
         }
     }
 
     private var content: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text("今日のToDo").font(.headline).foregroundStyle(accent)
+        VStack(alignment: .leading, spacing: family == .systemSmall ? 4 : 5) {
+            Text("今日のToDo")
+                .font(family == .systemSmall ? .subheadline.weight(.bold) : .headline)
+                .foregroundStyle(ink)
             if let day = entry.day {
-                Text("残り \(day.remaining)件・達成率 \(day.percent)%")
-                    .font(family == .systemSmall ? .footnote : .subheadline)
-                    .foregroundStyle(Color(red: 0.14, green: 0.29, blue: 0.39))
-                if family == .systemMedium {
-                    if day.titlesVisible {
-                        ForEach(day.tasks) { task in
-                            Link(destination: FlowWidgetRoute.url(for: task.id)) {
-                                Label(task.title, systemImage: "square").font(.caption).lineLimit(1)
-                                    .privacySensitive()
-                            }
-                        }
+                Text(family == .systemSmall
+                     ? "残り \(day.remaining)件 · \(day.percent)%達成"
+                     : "残り \(day.remaining)件・達成率 \(day.percent)%")
+                    .font(family == .systemSmall ? .caption2 : .subheadline)
+                    .foregroundStyle(ink)
+                ProgressView(value: Double(day.percent), total: 100)
+                    .tint(accent)
+                    .accessibilityLabel("今日の達成率 \(day.percent)%")
+                if day.titlesVisible {
+                    let visibleTasks = Array(day.tasks.prefix(family == .systemSmall ? 2 : 3))
+                    if visibleTasks.isEmpty {
+                        Text(day.remaining == 0 ? "今日のタスクはありません" : "今日のタスクを読み込み中")
+                            .font(.caption2)
+                            .foregroundStyle(ink)
                     } else {
-                        Text("ToDo名は非表示").font(.caption).foregroundStyle(accent)
+                        ForEach(visibleTasks) { task in
+                            Link(destination: FlowWidgetRoute.url(for: task.id)) {
+                                HStack(alignment: .top, spacing: 5) {
+                                    Image(systemName: "circle")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundStyle(accent)
+                                        .padding(.top, 1)
+                                    Text(task.title)
+                                        .font(family == .systemSmall ? .caption2.weight(.medium) : .caption.weight(.medium))
+                                        .foregroundStyle(ink)
+                                        .lineLimit(family == .systemSmall ? 2 : 1)
+                                        .multilineTextAlignment(.leading)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, family == .systemSmall ? 4 : 5)
+                                .background(Color.white, in: RoundedRectangle(cornerRadius: 7))
+                            }
+                            .privacySensitive()
+                        }
                     }
+                } else {
+                    Text("ToDo名は非表示")
+                        .font(.caption2)
+                        .foregroundStyle(ink)
                 }
             } else {
-                Text("LifeFlowを開いて更新").font(.caption).foregroundStyle(accent)
+                Text("LifeFlowを開いて更新")
+                    .font(.caption)
+                    .foregroundStyle(ink)
             }
             Spacer(minLength: 0)
         }
@@ -85,7 +118,7 @@ struct LifeFlowTodayWidget: Widget {
             TodayWidgetView(entry: entry)
         }
         .configurationDisplayName("今日のToDo")
-        .description("今日の残り件数と達成率を表示します。")
+        .description("今日の残り件数、達成率とToDoを表示します。")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

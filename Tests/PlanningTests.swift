@@ -113,4 +113,21 @@ final class PlanningTests: XCTestCase {
         let base = FlowWidgetContainer.identifier
         XCTAssertEqual(FlowWidgetContainer.groupIDs(["group.other", base + ".TEAM"]), [base + ".TEAM", base])
     }
+
+    func testWidgetSnapshotProvidesNamesForSmallAndMediumAndRespectsPrivacy() throws {
+        let now = date("2026-11-16T20:00:00")
+        let tasks = (1...4).map { FlowTask(title: "表示するタスク \($0)", day: clock.today(now)) }
+        let data = FlowData(tasks: tasks)
+
+        let visible = FlowWidgetSnapshot(data: data, now: now, clock: clock, showTitles: true)
+        let today = try XCTUnwrap(visible.entry(now: now, clock: clock))
+        XCTAssertEqual(today.tasks.map(\.title), ["表示するタスク 1", "表示するタスク 2", "表示するタスク 3"])
+
+        let hidden = FlowWidgetSnapshot(data: data, now: now, clock: clock, showTitles: false)
+        let hiddenToday = try XCTUnwrap(hidden.entry(now: now, clock: clock))
+        XCTAssertEqual(hiddenToday.remaining, 4)
+        XCTAssertTrue(hiddenToday.tasks.isEmpty)
+        let encoded = String(decoding: try JSONEncoder().encode(hidden), as: UTF8.self)
+        XCTAssertFalse(encoded.contains("表示するタスク"))
+    }
 }
