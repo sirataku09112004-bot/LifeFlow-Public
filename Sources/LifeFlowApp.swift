@@ -4,6 +4,7 @@ import SwiftUI
     @StateObject private var store = FlowStore()
     @State private var tab = 0
     @State private var linkedTask: FlowTask?
+    @State private var pendingWidgetCompletion: FlowWidgetRoute?
     @Environment(\.scenePhase) private var phase
     private let timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
     var body: some Scene {
@@ -15,13 +16,20 @@ import SwiftUI
                 .onOpenURL { url in
                     guard let route = FlowWidgetRoute(url) else { return }
                     tab = 0
-                    linkedTask = store.data.tasks.first { $0.id == route.taskID }
+                    if let id = route.taskID, let occurrenceDay = route.occurrenceDay {
+                        pendingWidgetCompletion = route
+                        completePendingWidgetTaskIfReady()
+                        linkedTask = nil
+                    } else {
+                        linkedTask = store.data.tasks.first { $0.id == route.taskID }
+                    }
                 }
                 .sheet(item: $linkedTask) { task in
                     TaskEditor(task: task).environmentObject(store)
                 }
                 .tint(FlowTheme.action)
                 .preferredColorScheme(.light)
+                .onChange(of: store.ready) { _ in completePendingWidgetTaskIfReady() }
                 .onChange(of: phase) { if $0 == .active { opened() } }
                 .onAppear { if phase == .active { opened() } }
                 .onReceive(timer) { now in
@@ -40,6 +48,13 @@ import SwiftUI
         store.roll()
         store.reminders.update(store.data.tasks)
         store.refreshWidget()
+    }
+
+    private func completePendingWidgetTaskIfReady() {
+        guard store.ready, let route = pendingWidgetCompletion,
+              let id = route.taskID, let occurrenceDay = route.occurrenceDay else { return }
+        pendingWidgetCompletion = nil
+        store.completeWidgetTask(id, occurrenceDay: occurrenceDay)
     }
 }
 struct FlowHome: View {

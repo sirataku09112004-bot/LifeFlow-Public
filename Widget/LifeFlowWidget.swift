@@ -52,19 +52,19 @@ private struct TodayWidgetView: View {
     }
 
     private var content: some View {
-        VStack(alignment: .leading, spacing: family == .systemSmall ? 4 : 2) {
+        VStack(alignment: .leading, spacing: 2) {
             Text("今日のToDo")
-                .font(family == .systemSmall ? .subheadline.weight(.bold) : .caption.weight(.bold))
+                .font(.caption.weight(.bold))
                 .foregroundStyle(ink)
             if let day = entry.day {
                 Text("残り \(day.remaining)件 · \(day.percent)%達成")
-                    .font(.caption2)
+                    .font(.system(size: 9))
                     .foregroundStyle(ink)
                 ProgressView(value: Double(day.percent), total: 100)
                     .tint(accent)
                     .accessibilityLabel("今日の達成率 \(day.percent)%")
                 if day.titlesVisible {
-                    let visibleTasks = Array(day.tasks.prefix(family == .systemSmall ? 2 : 4))
+                    let visibleTasks = Array(day.tasks.prefix(4))
                     if visibleTasks.isEmpty {
                         Text(day.remaining == 0 ? "今日のタスクはありません" : "今日のタスクを読み込み中")
                             .font(.caption2)
@@ -87,7 +87,6 @@ private struct TodayWidgetView: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .widgetURL(FlowWidgetRoute.url())
     }
 
     private func taskRow(_ task: FlowWidgetDay.Task) -> some View {
@@ -95,17 +94,17 @@ private struct TodayWidgetView: View {
             completionButton(for: task)
             Link(destination: FlowWidgetRoute.url(for: task.id)) {
                 Text(task.title)
-                    .font(.caption2.weight(.medium))
+                    .font(.system(size: family == .systemSmall ? 9 : 10, weight: .medium))
                     .foregroundStyle(ink)
-                    .lineLimit(family == .systemSmall ? 2 : 1)
+                    .lineLimit(1)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
             }
         }
         .frame(minWidth: 0, maxWidth: .infinity,
-               minHeight: family == .systemSmall ? 28 : 20,
-               maxHeight: family == .systemSmall ? 34 : 22, alignment: .leading)
+               minHeight: family == .systemSmall ? 19 : 20,
+               maxHeight: family == .systemSmall ? 21 : 22, alignment: .leading)
         .padding(.horizontal, 4)
         .background(Color.white, in: RoundedRectangle(cornerRadius: 6))
         .privacySensitive()
@@ -113,24 +112,23 @@ private struct TodayWidgetView: View {
 
     @ViewBuilder
     private func completionButton(for task: FlowWidgetDay.Task) -> some View {
-        if #available(iOS 17.0, *), let occurrenceDay = task.occurrenceDay {
-            Button(intent: CompleteWidgetTaskIntent(taskID: task.id, occurrenceDay: occurrenceDay)) {
+        if let occurrenceDay = task.occurrenceDay {
+            Link(destination: FlowWidgetRoute.completionURL(for: task.id, occurrenceDay: occurrenceDay)) {
                 Image(systemName: "circle")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(accent)
-                    .frame(width: family == .systemSmall ? 28 : 24,
-                           height: family == .systemSmall ? 28 : 20)
+                    .frame(width: family == .systemSmall ? 40 : 44,
+                           height: family == .systemSmall ? 19 : 20)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("「\(task.title)」を達成")
+            .accessibilityLabel("「\(task.title)」を達成してLifeFlowを開く")
         } else {
             Link(destination: FlowWidgetRoute.url(for: task.id)) {
                 Image(systemName: "circle")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(accent)
-                    .frame(width: family == .systemSmall ? 28 : 24,
-                           height: family == .systemSmall ? 28 : 20)
+                    .frame(width: family == .systemSmall ? 40 : 44,
+                           height: family == .systemSmall ? 19 : 20)
                     .contentShape(Rectangle())
             }
             .accessibilityLabel("LifeFlowでタスクを開く")

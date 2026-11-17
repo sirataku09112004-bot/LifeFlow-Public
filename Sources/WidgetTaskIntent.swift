@@ -5,7 +5,7 @@ import WidgetKit
 @available(iOS 17.0, *)
 struct CompleteWidgetTaskIntent: AppIntent {
     static var title: LocalizedStringResource = "ToDoを達成"
-    static var openAppWhenRun = false
+    static var openAppWhenRun = true
 
     @Parameter(title: "タスクID") var taskID: String
     @Parameter(title: "予定日") var occurrenceDay: Date

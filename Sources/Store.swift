@@ -234,17 +234,32 @@ struct BackupDocument: FileDocument {
         WidgetCenter.shared.reloadTimelines(ofKind: FlowWidgetContainer.kind)
     }
 
-    func synchronizeFromSharedStore() {
-        guard ready, usesSharedDataFile else { return }
+    @discardableResult func synchronizeFromSharedStore() -> Bool {
+        guard ready else { return false }
+        guard usesSharedDataFile else { return true }
         do {
             let latest = try FlowWidgetSharedDataFile.read(from: url)
             data = latest
             error = nil
             reminders.update(data.tasks)
             refreshWidget()
+            return true
         } catch {
             self.error = "共有データを読み込めませんでした。元ファイルは保護されています。\n\(error.localizedDescription)"
+            return false
         }
+    }
+
+    func completeWidgetTask(_ id: UUID, occurrenceDay: Date) {
+        guard synchronizeFromSharedStore() else { return }
+        let now = Date()
+        guard let completed = FlowWidgetTaskAction.complete(id, occurrenceDay: occurrenceDay,
+                                                            data: data, now: now, clock: clock) else {
+            error = "ウィジェットの予定が更新されています。表示を更新してから、もう一度お試しください。"
+            WidgetCenter.shared.reloadTimelines(ofKind: FlowWidgetContainer.kind)
+            return
+        }
+        commit(completed)
     }
 
     func planToday(_ id: UUID, enabled: Bool) {
