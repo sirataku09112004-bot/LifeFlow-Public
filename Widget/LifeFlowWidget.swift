@@ -1,3 +1,5 @@
+import AppIntents
+import LifeFlowCore
 import SwiftUI
 import WidgetKit
 
@@ -154,8 +156,8 @@ private struct TodayWidgetView: View {
     @ViewBuilder
     private func completionButton(for task: FlowWidgetDay.Task, displayedDay: Date, height: CGFloat) -> some View {
         if #available(iOS 17.0, *), !entry.opensForCompletion, let occurrenceDay = task.occurrenceDay {
-            Button(intent: CompleteLifeFlowWidgetTaskIntent(taskID: task.id, occurrenceDay: occurrenceDay,
-                                                            displayedDay: displayedDay)) {
+            Button(intent: CompleteSharedWidgetTaskIntent(taskID: task.id, occurrenceDay: occurrenceDay,
+                                                          displayedDay: displayedDay)) {
                 circle(height)
             }
             .buttonStyle(.borderless)
@@ -203,4 +205,9 @@ struct LifeFlowTodayWidget: Widget {
         .supportedFamilies([.systemSmall, .systemMedium])
         .contentMarginsDisabled()
     }
+}
+
+@available(iOS 17.0, *)
+struct LifeFlowWidgetIntentPackage: AppIntentsPackage {
+    static var includedPackages: [any AppIntentsPackage.Type] { [LifeFlowSharedIntentPackage.self] }
 }

@@ -26,15 +26,18 @@ import pathlib
 import sys
 
 host, widget = map(pathlib.Path, sys.argv[1:])
-intent = "CompleteLifeFlowWidgetTaskIntent"
+intent = "CompleteSharedWidgetTaskIntent"
 
 def actions(bundle):
     path = bundle / "Metadata.appintents" / "extract.actionsdata"
     return json.loads(path.read_text(encoding="utf-8"))["actions"] if path.is_file() else {}
 
-assert intent not in actions(host), "The widget completion intent must be owned by the extension"
-action = actions(widget)[intent]
-assert action["openAppWhenRun"] is False, "The completion intent must not open LifeFlow"
+host_action = actions(host)[intent]
+widget_action = actions(widget)[intent]
+assert host_action["fullyQualifiedTypeName"] == "LifeFlowCore." + intent
+assert host_action["mangledTypeNameV2"] == widget_action["mangledTypeNameV2"]
+assert host_action["openAppWhenRun"] is False and widget_action["openAppWhenRun"] is False
+print("Verified shared widget completion type in the app and widget metadata")
 PY
 
 # AltStore discovers capabilities from the executable's signature. Ad-hoc

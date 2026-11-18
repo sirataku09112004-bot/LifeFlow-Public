@@ -2,7 +2,7 @@ name: Build unsigned LifeFlow IPA
 on:
   workflow_dispatch:
   push:
-    branches: [main, fix/widget-extension-completion]
+    branches: [main, fix/shared-widget-intent]
 permissions:
   contents: read
 concurrency:

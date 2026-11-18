@@ -1,39 +1,41 @@
+#if os(iOS)
 import AppIntents
 import Foundation
 import OSLog
 import WidgetKit
 
 @available(iOS 17.0, *)
-struct CompleteLifeFlowWidgetTaskIntent: AppIntent {
-    static var title: LocalizedStringResource = "ウィジェットのToDoを達成"
-    static var isDiscoverable = false
+public struct CompleteSharedWidgetTaskIntent: AppIntent {
+    public static let title: LocalizedStringResource = "ウィジェットのToDoを達成"
+    public static let isDiscoverable = false
     private static let logger = Logger(subsystem: "local.private.lifeflow", category: "WidgetCompletion")
 
     #if compiler(>=6.2)
     @available(iOS 26.0, *)
-    static var supportedModes: IntentModes { .background }
+    public static var supportedModes: IntentModes { .background }
     #endif
 
     #if compiler(>=6.4)
     @available(iOS 27.0, *)
-    static var allowedExecutionTargets: IntentExecutionTargets { .widgetKitExtension }
+    public static var allowedExecutionTargets: IntentExecutionTargets { .main }
     #endif
 
-    @Parameter(title: "タスクID") var taskID: String
-    @Parameter(title: "予定日") var occurrenceStamp: String
-    @Parameter(title: "表示日") var displayedStamp: String
+    @Parameter(title: "タスクID") public var taskID: String
+    @Parameter(title: "予定日") public var occurrenceStamp: String
+    @Parameter(title: "表示日") public var displayedStamp: String
 
-    init() {}
+    public init() {}
 
-    init(taskID: UUID, occurrenceDay: Date, displayedDay: Date) {
+    public init(taskID: UUID, occurrenceDay: Date, displayedDay: Date) {
         self.taskID = taskID.uuidString
         occurrenceStamp = String(Int(occurrenceDay.timeIntervalSince1970))
         displayedStamp = String(Int(displayedDay.timeIntervalSince1970))
     }
 
-    func perform() async throws -> some IntentResult {
+    public func perform() async throws -> some IntentResult {
         defer { WidgetCenter.shared.reloadTimelines(ofKind: FlowWidgetContainer.kind) }
-        Self.logger.notice("Widget completion started in the widget extension")
+        let process = Bundle.main.bundleURL.pathExtension == "appex" ? "widget extension" : "main app"
+        Self.logger.notice("Widget completion started in \(process, privacy: .public)")
         record("ウィジェットから丸の操作を受け取りました")
         guard let id = UUID(uuidString: taskID),
               let occurrence = day(from: occurrenceStamp), let displayed = day(from: displayedStamp) else {
@@ -72,3 +74,7 @@ struct CompleteLifeFlowWidgetTaskIntent: AppIntent {
         )
     }
 }
+
+@available(iOS 17.0, *)
+public struct LifeFlowSharedIntentPackage: AppIntentsPackage {}
+#endif
