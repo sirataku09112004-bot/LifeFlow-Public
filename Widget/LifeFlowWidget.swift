@@ -158,6 +158,7 @@ private struct TodayWidgetView: View {
                                                                displayedDay: displayedDay)) {
                 circle(height)
             }
+            .buttonStyle(.borderless)
             .accessibilityLabel("ToDoを達成")
         } else if #available(iOS 27.0, *), let occurrenceDay = task.occurrenceDay {
             completionLink(for: task, occurrenceDay: occurrenceDay, displayedDay: displayedDay, height: height)
