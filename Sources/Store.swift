@@ -214,14 +214,18 @@ struct BackupDocument: FileDocument {
         refreshWidget()
     }
 
-    func refreshWidget() {
+    func refreshWidget(force: Bool = false) {
         #if DEBUG && targetEnvironment(simulator)
         if ProcessInfo.processInfo.environment["LIFEFLOW_UI_TEST_STORE"] != nil { return }
         #endif
-        guard ready, let file = FlowWidgetContainer.file else { return }
+        guard ready else { return }
+        guard let file = FlowWidgetContainer.file else {
+            if force { error = "ウィジェットとデータを共有できません。AltStoreでウィジェット付きIPAを使い、拡張機能を残してインストールしてください。" }
+            return
+        }
         let now = Date()
         let snapshot = FlowWidgetSnapshot(data: data, now: now, clock: clock, showTitles: widgetShowsTitles)
-        if snapshot == widgetSnapshot { return }
+        if !force, snapshot == widgetSnapshot, FileManager.default.fileExists(atPath: file.path) { return }
         do {
             try FlowWidgetSharedDataFile.writeData(JSONEncoder().encode(snapshot), to: file, sharedGroup: true)
             widgetSnapshot = snapshot
@@ -230,36 +234,23 @@ struct BackupDocument: FileDocument {
             // If a refresh fails, do not leave previously shared task names behind.
             try? FileManager.default.removeItem(at: file)
             widgetSnapshot = nil
+            if force { self.error = "ウィジェットの表示を更新できませんでした。" }
         }
         WidgetCenter.shared.reloadTimelines(ofKind: FlowWidgetContainer.kind)
     }
 
-    @discardableResult func synchronizeFromSharedStore() -> Bool {
+    @discardableResult
+    func completeWidgetTask(_ id: UUID, occurrenceDay: Date, displayedDay: Date? = nil) -> Bool {
         guard ready else { return false }
-        guard usesSharedDataFile else { return true }
-        do {
-            let latest = try FlowWidgetSharedDataFile.read(from: url)
-            data = latest
-            error = nil
-            reminders.update(data.tasks)
-            refreshWidget()
-            return true
-        } catch {
-            self.error = "共有データを読み込めませんでした。元ファイルは保護されています。\n\(error.localizedDescription)"
-            return false
-        }
-    }
-
-    func completeWidgetTask(_ id: UUID, occurrenceDay: Date) {
-        guard synchronizeFromSharedStore() else { return }
         let now = Date()
         guard let completed = FlowWidgetTaskAction.complete(id, occurrenceDay: occurrenceDay,
+                                                            displayedDay: displayedDay,
                                                             data: data, now: now, clock: clock) else {
             error = "ウィジェットの予定が更新されています。表示を更新してから、もう一度お試しください。"
             WidgetCenter.shared.reloadTimelines(ofKind: FlowWidgetContainer.kind)
-            return
+            return false
         }
-        commit(completed)
+        return commit(completed)
     }
 
     func planToday(_ id: UUID, enabled: Bool) {

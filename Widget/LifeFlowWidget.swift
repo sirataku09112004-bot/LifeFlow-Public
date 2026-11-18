@@ -4,6 +4,7 @@ import WidgetKit
 private struct TodayEntry: TimelineEntry {
     let date: Date
     let day: FlowWidgetDay?
+    var sharedStorageAvailable = true
 }
 
 private struct TodayProvider: TimelineProvider {
@@ -13,45 +14,68 @@ private struct TodayProvider: TimelineProvider {
 
     func getSnapshot(in context: Context, completion: @escaping (TodayEntry) -> Void) {
         let now = Date()
-        completion(context.isPreview ? placeholder(in: context) : TodayEntry(date: now, day: read()?.entry(now: now, clock: FlowClock())))
+        let file = FlowWidgetContainer.file
+        completion(context.isPreview ? placeholder(in: context) :
+            TodayEntry(date: now, day: read(file)?.entry(now: now, clock: FlowClock()),
+                       sharedStorageAvailable: file != nil))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<TodayEntry>) -> Void) {
         let now = Date()
         let clock = FlowClock()
-        let snapshot = read()
+        let file = FlowWidgetContainer.file
+        let snapshot = read(file)
         let today = clock.today(now)
-        var entries = [TodayEntry(date: now, day: snapshot?.entry(now: now, clock: clock))]
-        for offset in 1...7 {
-            guard let day = clock.calendar.date(byAdding: .day, value: offset, to: today),
-                  let boundary = clock.calendar.date(bySettingHour: 4, minute: 0, second: 0, of: day) else { break }
-            entries.append(TodayEntry(date: boundary, day: snapshot?.entry(now: boundary, clock: clock)))
+        let current = TodayEntry(date: now, day: snapshot?.entry(now: now, clock: clock),
+                                 sharedStorageAvailable: file != nil)
+        var entries = [current]
+        guard current.day != nil else {
+            completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(15 * 60))))
+            return
         }
-        completion(Timeline(entries: entries, policy: .atEnd))
+        for offset in 1..<7 {
+            guard let day = clock.calendar.date(byAdding: .day, value: offset, to: today),
+                  let boundary = clock.calendar.date(bySettingHour: 4, minute: 0, second: 0, of: day),
+                  let next = snapshot?.entry(now: boundary, clock: clock) else { break }
+            entries.append(TodayEntry(date: boundary, day: next))
+        }
+        let finalDay = entries.last?.day?.day ?? today
+        let nextDay = clock.calendar.date(byAdding: .day, value: 1, to: finalDay) ?? finalDay
+        let boundary = clock.calendar.date(bySettingHour: 4, minute: 0, second: 0, of: nextDay) ?? now
+        entries.append(TodayEntry(date: boundary, day: nil))
+        completion(Timeline(entries: entries, policy: .after(boundary)))
     }
 
-    private func read() -> FlowWidgetSnapshot? {
-        guard let file = FlowWidgetContainer.file, let bytes = try? Data(contentsOf: file) else { return nil }
+    private func read(_ file: URL?) -> FlowWidgetSnapshot? {
+        guard let file, let bytes = try? FlowWidgetSharedDataFile.readData(from: file) else { return nil }
         return try? JSONDecoder().decode(FlowWidgetSnapshot.self, from: bytes)
     }
 }
 
 private struct TodayWidgetView: View {
     @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetRenderingMode) private var renderingMode
     let entry: TodayEntry
     private let accent = Color(red: 0.04, green: 0.37, blue: 0.60)
-    private let ink = Color(red: 0.09, green: 0.16, blue: 0.22)
+    private var ink: Color { renderingMode == .fullColor ? Color(red: 0.09, green: 0.16, blue: 0.22) : .primary }
     private let canvas = Color(red: 0.92, green: 0.97, blue: 1.0)
 
     var body: some View {
         if #available(iOS 17.0, *) {
-            content.containerBackground(canvas, for: .widget)
+            content.padding(8).containerBackground(canvas, for: .widget)
         } else {
-            content.padding(12).background(canvas)
+            content.padding(8).background(canvas)
         }
     }
 
     private var content: some View {
+        GeometryReader { geometry in
+            layout(rowHeight: min(26, max(14, floor((geometry.size.height - 38) / 4))))
+        }
+        .widgetURL(FlowWidgetRoute.url())
+    }
+
+    private func layout(rowHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("今日のToDo")
                 .font(.caption.weight(.bold))
@@ -60,9 +84,11 @@ private struct TodayWidgetView: View {
                 Text("残り \(day.remaining)件 · \(day.percent)%達成")
                     .font(.system(size: 9))
                     .foregroundStyle(ink)
-                ProgressView(value: Double(day.percent), total: 100)
-                    .tint(accent)
-                    .accessibilityLabel("今日の達成率 \(day.percent)%")
+                if family != .systemSmall {
+                    ProgressView(value: Double(day.percent), total: 100)
+                        .tint(accent)
+                        .accessibilityLabel("今日の達成率 \(day.percent)%")
+                }
                 if day.titlesVisible {
                     let visibleTasks = Array(day.tasks.prefix(4))
                     if visibleTasks.isEmpty {
@@ -71,16 +97,16 @@ private struct TodayWidgetView: View {
                             .foregroundStyle(ink)
                     } else {
                         ForEach(visibleTasks) { task in
-                            taskRow(task)
+                            taskRow(task, displayedDay: day.day, height: rowHeight)
                         }
                     }
                 } else {
-                    Text("ToDo名は非表示")
+                    Text("LifeFlowの設定でToDo名を表示できます")
                         .font(.caption2)
                         .foregroundStyle(ink)
                 }
             } else {
-                Text("LifeFlowを開いて更新")
+                Text(entry.sharedStorageAvailable ? "LifeFlowを開いて更新" : "LifeFlowとデータを共有できません")
                     .font(.caption)
                     .foregroundStyle(ink)
             }
@@ -89,50 +115,63 @@ private struct TodayWidgetView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private func taskRow(_ task: FlowWidgetDay.Task) -> some View {
+    private func taskRow(_ task: FlowWidgetDay.Task, displayedDay: Date, height: CGFloat) -> some View {
         HStack(spacing: 3) {
-            completionButton(for: task)
-            Link(destination: FlowWidgetRoute.url(for: task.id)) {
-                Text(task.title)
-                    .font(.system(size: family == .systemSmall ? 9 : 10, weight: .medium))
-                    .foregroundStyle(ink)
-                    .lineLimit(1)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
+            completionButton(for: task, displayedDay: displayedDay, height: height)
+            if family == .systemSmall {
+                taskTitle(task.title)
+            } else {
+                Link(destination: FlowWidgetRoute.url(for: task.id)) { taskTitle(task.title) }
             }
         }
-        .frame(minWidth: 0, maxWidth: .infinity,
-               minHeight: family == .systemSmall ? 19 : 20,
-               maxHeight: family == .systemSmall ? 21 : 22, alignment: .leading)
-        .padding(.horizontal, 4)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 6))
-        .privacySensitive()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: height)
+        .padding(.trailing, 4)
+        .background(renderingMode == .fullColor ? Color.white : Color.clear,
+                    in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private func taskTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: family == .systemSmall ? 10 : 11, weight: .medium))
+            .foregroundStyle(ink)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .privacySensitive()
     }
 
     @ViewBuilder
-    private func completionButton(for task: FlowWidgetDay.Task) -> some View {
-        if let occurrenceDay = task.occurrenceDay {
+    private func completionButton(for task: FlowWidgetDay.Task, displayedDay: Date, height: CGFloat) -> some View {
+        if #available(iOS 17.0, *), let occurrenceDay = task.occurrenceDay {
+            Button(intent: CompleteWidgetTaskIntent(taskID: task.id, occurrenceDay: occurrenceDay,
+                                                   displayedDay: displayedDay)) {
+                circle(height)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("「\(task.title)」を達成")
+            .privacySensitive()
+        } else if family != .systemSmall, let occurrenceDay = task.occurrenceDay {
             Link(destination: FlowWidgetRoute.completionURL(for: task.id, occurrenceDay: occurrenceDay)) {
-                Image(systemName: "circle")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(accent)
-                    .frame(width: family == .systemSmall ? 40 : 44,
-                           height: family == .systemSmall ? 19 : 20)
-                    .contentShape(Rectangle())
+                circle(height)
             }
             .accessibilityLabel("「\(task.title)」を達成してLifeFlowを開く")
+            .privacySensitive()
         } else {
-            Link(destination: FlowWidgetRoute.url(for: task.id)) {
-                Image(systemName: "circle")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(accent)
-                    .frame(width: family == .systemSmall ? 40 : 44,
-                           height: family == .systemSmall ? 19 : 20)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel("LifeFlowでタスクを開く")
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(ink)
+                .frame(width: 24, height: height)
+                .accessibilityHidden(true)
         }
+    }
+
+    private func circle(_ height: CGFloat) -> some View {
+        Image(systemName: "circle")
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(renderingMode == .fullColor ? accent : ink)
+            .frame(width: 40, height: height)
+            .contentShape(Rectangle())
     }
 }
 
@@ -145,5 +184,6 @@ struct LifeFlowTodayWidget: Widget {
         .configurationDisplayName("今日のToDo")
         .description("今日の残り件数、達成率とToDoを表示します。")
         .supportedFamilies([.systemSmall, .systemMedium])
+        .contentMarginsDisabled()
     }
 }

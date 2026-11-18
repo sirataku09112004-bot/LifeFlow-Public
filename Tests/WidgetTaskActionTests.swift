@@ -44,4 +44,20 @@ final class WidgetTaskActionTests: XCTestCase {
         XCTAssertNil(FlowWidgetTaskAction.complete(habit.id, occurrenceDay: habit.day,
                                                    data: FlowData(tasks: [moved]), now: now, clock: clock))
     }
+
+    func testYesterdayWidgetCannotCompleteAStillMatchingOccurrence() throws {
+        let before = date("2026-11-17T03:59:59")
+        let after = date("2026-11-17T04:00:00")
+        let task = FlowTask(title: "予定", day: clock.today(after), plannedDay: clock.today(before))
+        let data = FlowData(tasks: [task])
+        XCTAssertNotNil(FlowWidgetTaskAction.complete(task.id, occurrenceDay: task.day,
+                                                      displayedDay: clock.today(before), data: data,
+                                                      now: before, clock: clock))
+        XCTAssertNil(FlowWidgetTaskAction.complete(task.id, occurrenceDay: task.day,
+                                                   displayedDay: clock.today(before), data: data,
+                                                   now: after, clock: clock))
+        XCTAssertNotNil(FlowWidgetTaskAction.complete(task.id, occurrenceDay: task.day,
+                                                      displayedDay: clock.today(after), data: data,
+                                                      now: after, clock: clock))
+    }
 }

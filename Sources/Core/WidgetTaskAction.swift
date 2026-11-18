@@ -1,8 +1,10 @@
 import Foundation
 
 enum FlowWidgetTaskAction {
-    static func complete(_ taskID: UUID, occurrenceDay: Date, data: FlowData,
+    static func complete(_ taskID: UUID, occurrenceDay: Date, displayedDay: Date? = nil, data: FlowData,
                          now: Date, clock: FlowClock) -> FlowData? {
+        // The widget may still show yesterday's timeline after the 04:00 boundary.
+        if let displayedDay, displayedDay != clock.today(now) { return nil }
         var updated = data
         guard updated.rollover(now: now, clock: clock, maxCarries: 10_000) else { return nil }
         let list = FlowTaskList(tasks: updated.tasks, query: "", now: now, clock: clock,
@@ -36,19 +38,6 @@ enum FlowWidgetSharedDataFile {
         let bytes = try result.get()
         guard bytes.count <= maxDataBytes else { throw FlowError.invalidBackup }
         return bytes
-    }
-
-    static func read(from url: URL) throws -> FlowData {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode(FlowData.self, from: readData(from: url)).validated()
-    }
-
-    static func write(_ data: FlowData, to url: URL, sharedGroup: Bool) throws {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try writeData(encoder.encode(data), to: url, sharedGroup: sharedGroup)
     }
 
     static func writeData(_ bytes: Data, to url: URL, sharedGroup: Bool) throws {

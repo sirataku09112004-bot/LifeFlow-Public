@@ -233,6 +233,26 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(unicode?.date, date("2027-01-02T00:00:00"))
         XCTAssertEqual(unicode?.title, "📚 読む")
     }
+    func testWeekPhrasesInTitleAndMemoUseTheFourAMBoundary() {
+        let before = date("2026-11-09T03:59:59")
+        let after = date("2026-11-09T04:00:00")
+        let nextWeek = clock.parseInput(title: "来週 レポートを提出", note: "", now: after)
+        XCTAssertEqual(nextWeek?.date, date("2026-11-22T00:00:00"))
+        XCTAssertEqual(nextWeek?.title, "レポートを提出")
+        let weekend = clock.parseInput(title: "片付け", note: "週末までには書類を整理", now: before)
+        XCTAssertEqual(weekend?.date, date("2026-11-08T00:00:00"))
+        XCTAssertEqual(weekend?.note, "書類を整理")
+        XCTAssertEqual(clock.parseInput(title: "週末に片付け", note: "", now: after)?.date,
+                       date("2026-11-15T00:00:00"))
+        let weekday = clock.parseInput(title: "来週の金曜日までに提出", note: "", now: after)
+        XCTAssertEqual(weekday?.date, date("2026-11-20T00:00:00"))
+        XCTAssertEqual(weekday?.title, "提出")
+        let nextWeekend = clock.parseInput(title: "再来週の週末に片付け", note: "", now: after)
+        XCTAssertEqual(nextWeekend?.date, date("2026-11-29T00:00:00"))
+        XCTAssertEqual(nextWeekend?.title, "片付け")
+        XCTAssertEqual(clock.parseInput(title: "来週の資料 1117", note: "", now: after)?.date,
+                       date("2026-11-17T00:00:00"))
+    }
     func testCombinedTaskListUsesSameIDsAndGlobalSearch() {
         let today = date("2026-11-03T00:00:00")
         let a = FlowTask(title: "今日の掃除", day: today)

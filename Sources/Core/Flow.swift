@@ -191,8 +191,8 @@ struct FlowClock {
         if ["来月中", "来月末"].contains(where: normalized.contains) { return monthEnd(base, offset: 1) }
         if ["今月中", "今月末", "今月いっぱい", "月内", "月末"].contains(where: normalized.contains) { return monthEnd(base, offset: 0) }
         let weekOffset: Int?
-        if normalized.contains("再来週中") || normalized.contains("再来週末") { weekOffset = 2 }
-        else if normalized.contains("来週中") || normalized.contains("来週末") { weekOffset = 1 }
+        if normalized.contains("再来週") { weekOffset = 2 }
+        else if normalized.contains("来週") { weekOffset = 1 }
         else if normalized.contains("今週中") || normalized.contains("今週末") || normalized.contains("週末") { weekOffset = 0 }
         else { weekOffset = nil }
         if let offset = weekOffset {

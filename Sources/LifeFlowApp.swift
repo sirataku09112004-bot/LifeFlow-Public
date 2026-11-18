@@ -1,12 +1,25 @@
+import AppIntents
 import SwiftUI
 
 @main @MainActor struct LifeFlowApp: App {
-    @StateObject private var store = FlowStore()
+    @StateObject private var store: FlowStore
     @State private var tab = 0
     @State private var linkedTask: FlowTask?
     @State private var pendingWidgetCompletion: FlowWidgetRoute?
     @Environment(\.scenePhase) private var phase
     private let timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+
+    init() {
+        let store = FlowStore()
+        _store = StateObject(wrappedValue: store)
+        if #available(iOS 17.0, *) {
+            let completeTask: WidgetTaskCompletion = { id, occurrenceDay, displayedDay in
+                store.completeWidgetTask(id, occurrenceDay: occurrenceDay, displayedDay: displayedDay)
+            }
+            AppDependencyManager.shared.add(dependency: completeTask)
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             TabView(selection: $tab) {
@@ -16,7 +29,7 @@ import SwiftUI
                 .onOpenURL { url in
                     guard let route = FlowWidgetRoute(url) else { return }
                     tab = 0
-                    if let id = route.taskID, let occurrenceDay = route.occurrenceDay {
+                    if route.taskID != nil, route.occurrenceDay != nil {
                         pendingWidgetCompletion = route
                         completePendingWidgetTaskIfReady()
                         linkedTask = nil
@@ -43,7 +56,6 @@ import SwiftUI
 
     private func opened() {
         guard store.ready else { return }
-        store.synchronizeFromSharedStore()
         store.reminders.markOpened(now: Date(), clock: store.clock, tasks: store.data.tasks)
         store.roll()
         store.reminders.update(store.data.tasks)
@@ -148,10 +160,11 @@ struct FlowHome: View {
                         Button("ToDoを検索") { showingSearch = true }
                         Button("通知設定") { showingNotifications = true }
                         Button("カテゴリを管理") { showingCategoryButtons = true }
-                        if store.widgetEnabled {
+                        Menu("ウィジェット設定") {
                             Toggle("ウィジェットにToDo名を表示", isOn: Binding(
                                 get: { store.widgetShowsTitles }, set: { store.setWidgetShowsTitles($0) }
-                            ))
+                            )).disabled(!store.widgetEnabled)
+                            Button("ウィジェットを更新") { store.refreshWidget(force: true) }
                         }
                         Divider()
                         Button("JSONバックアップを書き出す") {

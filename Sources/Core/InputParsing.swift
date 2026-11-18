@@ -25,12 +25,13 @@ extension FlowClock {
             #"(?<![\d０-９])[\d０-９]{1,2}月[\d０-９]{1,2}日"#,
             #"(?<![\d０-９/／])[\d０-９]{1,2}[/／][\d０-９]{1,2}(?![/／\d０-９])"#,
             #"明後日|明日|今日"#,
-            #"(?:再来週|来週|今週)?[日月火水木金土]曜(?:日)?"#,
+            #"(?:(?:再来週|来週|今週)\s*(?:の\s*)?)?[日月火水木金土]曜(?:日)?"#,
             #"再来年中|再来年末|来年中|来年末|今年中|今年末|今年いっぱい|年内|年末"#,
             #"再来月中|再来月末|来月中|来月末|今月中|今月末|今月いっぱい|月内|月末"#,
-            #"再来週中|再来週末|来週中|来週末|今週中|今週末|週末"#,
+            #"(?:再来週|来週|今週)(?:\s*の\s*週末|[中末])|週末"#,
             #"(?<![\d０-９.．-])[\d０-９]{1,3}(?:日|週間|か月|ヶ月|カ月|年)後"#,
-            #"(?<![\d０-９A-Za-zＡ-Ｚａ-ｚ/／\-－])[\d０-９]{4}(?![\d０-９A-Za-zＡ-Ｚａ-ｚ年/／\-－])"#
+            #"(?<![\d０-９A-Za-zＡ-Ｚａ-ｚ/／\-－])[\d０-９]{4}(?![\d０-９A-Za-zＡ-Ｚａ-ｚ年/／\-－])"#,
+            #"再来週|来週"#
         ]
         for pattern in patterns {
             let regex = try! NSRegularExpression(pattern: pattern)
@@ -40,7 +41,7 @@ extension FlowClock {
             // An explicit invalid date is left untouched instead of falling back to another token.
             guard let date = recognize(expression, now: now) else { return nil }
             var tail = String(text[range.upperBound...])
-            for particle in ["までに", "まで", "に", "の"] where tail.hasPrefix(particle) {
+            for particle in ["までには", "までに", "まで", "には", "に", "の"] where tail.hasPrefix(particle) {
                 tail.removeFirst(particle.count)
                 break
             }
