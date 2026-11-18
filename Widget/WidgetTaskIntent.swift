@@ -4,7 +4,7 @@ import OSLog
 import WidgetKit
 
 @available(iOS 17.0, *)
-struct CompleteWidgetTaskInBackgroundIntent: AppIntent {
+struct CompleteLifeFlowWidgetTaskIntent: AppIntent {
     static var title: LocalizedStringResource = "ウィジェットのToDoを達成"
     static var isDiscoverable = false
     private static let logger = Logger(subsystem: "local.private.lifeflow", category: "WidgetCompletion")
@@ -16,7 +16,7 @@ struct CompleteWidgetTaskInBackgroundIntent: AppIntent {
 
     #if compiler(>=6.4)
     @available(iOS 27.0, *)
-    static var allowedExecutionTargets: IntentExecutionTargets { .main }
+    static var allowedExecutionTargets: IntentExecutionTargets { .widgetKitExtension }
     #endif
 
     @Parameter(title: "タスクID") var taskID: String
@@ -33,8 +33,7 @@ struct CompleteWidgetTaskInBackgroundIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         defer { WidgetCenter.shared.reloadTimelines(ofKind: FlowWidgetContainer.kind) }
-        let target = Bundle.main.bundleURL.pathExtension == "appex" ? "widget extension" : "main app"
-        Self.logger.notice("Widget completion started in \(target, privacy: .public)")
+        Self.logger.notice("Widget completion started in the widget extension")
         record("ウィジェットから丸の操作を受け取りました")
         guard let id = UUID(uuidString: taskID),
               let occurrence = day(from: occurrenceStamp), let displayed = day(from: displayedStamp) else {

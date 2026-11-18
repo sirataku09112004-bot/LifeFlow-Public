@@ -159,9 +159,7 @@ struct FlowHome: View {
                                 get: { store.widgetOpensForCompletion }, set: { store.setWidgetOpensForCompletion($0) }
                             )).disabled(!store.widgetEnabled)
                             Button("ウィジェットを更新") { store.refreshWidget(force: true) }
-                            Button("最後のウィジェット操作") {
-                                store.error = store.lastWidgetAction ?? "ウィジェットから受け取った操作はまだありません。"
-                            }
+                            Button("最後のウィジェット操作") { store.error = store.widgetDiagnostics }
                         }
                         Divider()
                         Button("JSONバックアップを書き出す") {

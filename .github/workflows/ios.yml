@@ -2,7 +2,7 @@ name: Build unsigned LifeFlow IPA
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, fix/widget-extension-completion]
 permissions:
   contents: read
 concurrency:
@@ -24,6 +24,7 @@ jobs:
         run: |
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
+          xcrun simctl list runtimes
       - name: Test and build unsigned device IPA
         run: bash scripts/build-unsigned.sh
       - name: Upload unsigned IPA
@@ -45,7 +46,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          device="$(xcrun simctl list devices available --json | python3 -c 'import json, sys; devices=json.load(sys.stdin)["devices"]; phones=[d for runtime, group in sorted(devices.items(), reverse=True) if ".iOS-" in runtime for d in group if d["name"].startswith("iPhone")]; print(next((d for d in phones if "Pro Max" in d["name"]), phones[0])["udid"])')"
+          device="$(xcrun simctl list devices available --json | python3 -c 'import json, sys; devices=json.load(sys.stdin)["devices"]; groups=sorted(devices.items(), reverse=True); phones=[(runtime, d) for runtime, group in groups if ".iOS-" in runtime for d in group if d["name"].startswith("iPhone")]; runtime=next((r for r, _ in phones if r.endswith(".iOS-27-0")), phones[0][0]); selected=[d for r, d in phones if r == runtime]; print(next((d for d in selected if "Pro Max" in d["name"]), selected[0])["udid"])')"
           xcodebuild -project LifeFlow.xcodeproj -scheme LifeFlow -configuration Debug \
             -destination "platform=iOS Simulator,id=$device" -parallel-testing-enabled NO \
             -derivedDataPath build/simulator test

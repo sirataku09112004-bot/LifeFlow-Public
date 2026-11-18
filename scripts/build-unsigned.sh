@@ -20,6 +20,22 @@ WIDGET_OUTPUT="$PWD/artifacts/LifeFlow-widget.ipa"
 APP_STAGE="$STAGE/Payload/LifeFlow.app"
 EXTENSION="$APP_STAGE/PlugIns/LifeFlowWidget.appex"
 test -d "$EXTENSION"
+python3 - "$APP_STAGE" "$EXTENSION" <<'PY'
+import json
+import pathlib
+import sys
+
+host, widget = map(pathlib.Path, sys.argv[1:])
+intent = "CompleteLifeFlowWidgetTaskIntent"
+
+def actions(bundle):
+    path = bundle / "Metadata.appintents" / "extract.actionsdata"
+    return json.loads(path.read_text(encoding="utf-8"))["actions"] if path.is_file() else {}
+
+assert intent not in actions(host), "The widget completion intent must be owned by the extension"
+action = actions(widget)[intent]
+assert action["openAppWhenRun"] is False, "The completion intent must not open LifeFlow"
+PY
 
 # AltStore discovers capabilities from the executable's signature. Ad-hoc
 # signatures carry the requested entitlements without a development profile.

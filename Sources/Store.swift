@@ -26,6 +26,21 @@ struct BackupDocument: FileDocument {
         }
         return latest.map { $0.date.formatted(date: .abbreviated, time: .standard) + "  " + $0.message }
     }
+    var widgetDiagnostics: String {
+        let extensionURL = Bundle.main.builtInPlugInsURL?.appendingPathComponent("LifeFlowWidget.appex")
+        let metadata = extensionURL?.appendingPathComponent("Metadata.appintents/extract.actionsdata")
+        let actions = metadata.flatMap { try? Data(contentsOf: $0) }.flatMap {
+            (try? JSONSerialization.jsonObject(with: $0) as? [String: Any])?["actions"] as? [String: Any]
+        }
+        let actionPresent = actions?["CompleteLifeFlowWidgetTaskIntent"] != nil
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "不明"
+        return [
+            "ビルド \(build)",
+            "ウィジェットの操作定義 \(actionPresent ? "あり" : "見つかりません")",
+            "共有データ領域 \(widgetEnabled ? "利用可" : "利用不可")",
+            lastWidgetAction ?? "ウィジェットから受け取った操作はまだありません。"
+        ].joined(separator: "\n")
+    }
     private var widgetSnapshot: FlowWidgetSnapshot?
     private var widgetDay: Date?
     var widgetEnabled: Bool { FlowWidgetContainer.file != nil }
