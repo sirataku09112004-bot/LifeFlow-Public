@@ -47,6 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           device="$(xcrun simctl list devices available --json | python3 -c 'import json, sys; devices=json.load(sys.stdin)["devices"]; groups=sorted(devices.items(), reverse=True); phones=[(runtime, d) for runtime, group in groups if ".iOS-" in runtime for d in group if d["name"].startswith("iPhone")]; runtime=next((r for r, _ in phones if r.endswith(".iOS-27-0")), phones[0][0]); selected=[d for r, d in phones if r == runtime]; print(next((d for d in selected if "Pro Max" in d["name"]), selected[0])["udid"])')"
+          xcrun simctl bootstatus "$device" -b
           xcodebuild -project LifeFlow.xcodeproj -scheme LifeFlow -configuration Debug \
             -destination "platform=iOS Simulator,id=$device" -parallel-testing-enabled NO \
             -derivedDataPath build/simulator test
