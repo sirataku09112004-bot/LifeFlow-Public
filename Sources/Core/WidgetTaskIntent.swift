@@ -76,5 +76,37 @@ public struct CompleteSharedWidgetTaskIntent: AppIntent {
 }
 
 @available(iOS 17.0, *)
+public struct CheckLifeFlowWidgetRegistrationIntent: AppIntent {
+    public static let title: LocalizedStringResource = "LifeFlowの操作診断"
+    private static let logger = Logger(subsystem: "local.private.lifeflow", category: "WidgetCompletion")
+
+    #if compiler(>=6.2)
+    @available(iOS 26.0, *)
+    public static var supportedModes: IntentModes { .background }
+    #endif
+
+    #if compiler(>=6.4)
+    @available(iOS 27.0, *)
+    public static var allowedExecutionTargets: IntentExecutionTargets { .main }
+    #endif
+
+    public init() {}
+
+    public func perform() async throws -> some IntentResult & ProvidesDialog {
+        Self.logger.notice("CheckLifeFlowWidgetRegistrationIntent started")
+        guard let url = FlowWidgetContainer.resultFile else {
+            return .result(dialog: "操作診断は実行されました。共有データ領域を開けません。")
+        }
+        do {
+            let report = FlowWidgetActionReport(date: Date(), message: "iOSから操作診断を実行できました")
+            try FlowWidgetSharedDataFile.writeData(JSONEncoder().encode(report), to: url, sharedGroup: true)
+            return .result(dialog: "LifeFlowの操作診断に成功しました。")
+        } catch {
+            return .result(dialog: "操作診断は実行されました。診断結果を保存できません。")
+        }
+    }
+}
+
+@available(iOS 17.0, *)
 public struct LifeFlowSharedIntentPackage: AppIntentsPackage {}
 #endif

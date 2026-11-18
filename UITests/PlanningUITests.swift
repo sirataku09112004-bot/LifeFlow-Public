@@ -74,7 +74,7 @@ final class PlanningUITests: XCTestCase {
         guard #available(iOS 18.4, *) else { throw XCTSkip("OS-level URL opening requires iOS 18.4.") }
         let app = launch()
         app.tabBars.buttons["年間目標"].tap()
-        XCUIDevice.shared.system.open(URL(string: "lifeflow://todo/EF6A4AF5-6253-4D4D-B67B-9DC9BFE33F50")!)
+        XCUIDevice.shared.system.open(URL(string: "lifeflowprobe://todo/EF6A4AF5-6253-4D4D-B67B-9DC9BFE33F50")!)
         let prompt = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
         if prompt.waitForExistence(timeout: 2), prompt.buttons["Open"].exists {
             prompt.buttons["Open"].tap()
@@ -95,7 +95,7 @@ final class PlanningUITests: XCTestCase {
             ? calendar.date(byAdding: .day, value: -1, to: midnight)!
             : midnight
         let stamp = today.timeIntervalSince1970
-        let url = URL(string: "lifeflow://todo/complete/61565EF1-4DD7-4962-B996-949D0E15D75F?day=\(stamp)&shown=\(stamp)")!
+        let url = URL(string: "lifeflowprobe://todo/complete/61565EF1-4DD7-4962-B996-949D0E15D75F?day=\(stamp)&shown=\(stamp)")!
         XCUIDevice.shared.system.open(url)
         let prompt = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
         if prompt.waitForExistence(timeout: 2), prompt.buttons["Open"].exists {

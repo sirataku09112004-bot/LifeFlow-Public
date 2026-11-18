@@ -1,8 +1,8 @@
 import Foundation
 
 enum FlowWidgetContainer {
-    static let identifier = "group.local.private.lifeflow.widget"
-    static let kind = "LifeFlowToday"
+    static let identifier = "group.local.private.lifeflow.widgetprobe"
+    static let kind = "LifeFlowProbeToday"
     static let fileName = "today-widget.json"
 
     static func groupIDs(_ signed: [String]) -> [String] {
@@ -33,12 +33,13 @@ struct FlowWidgetActionReport: Codable {
 }
 
 struct FlowWidgetRoute {
+    private static let scheme = "lifeflowprobe"
     let taskID: UUID?
     let occurrenceDay: Date?
     let displayedDay: Date?
 
     init?(_ url: URL) {
-        guard url.scheme == "lifeflow", url.host == "todo" else { return nil }
+        guard url.scheme == Self.scheme, url.host == "todo" else { return nil }
         let path = url.pathComponents.filter { $0 != "/" }
         let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         func date(_ name: String) -> Date? {
@@ -68,13 +69,13 @@ struct FlowWidgetRoute {
     }
 
     static func url(for taskID: UUID? = nil) -> URL {
-        if let taskID { return URL(string: "lifeflow://todo/\(taskID.uuidString)")! }
-        return URL(string: "lifeflow://todo")!
+        if let taskID { return URL(string: "\(scheme)://todo/\(taskID.uuidString)")! }
+        return URL(string: "\(scheme)://todo")!
     }
 
     static func completionURL(for taskID: UUID, occurrenceDay: Date, displayedDay: Date) -> URL {
         var components = URLComponents()
-        components.scheme = "lifeflow"
+        components.scheme = scheme
         components.host = "todo"
         components.path = "/complete/\(taskID.uuidString)"
         components.queryItems = [

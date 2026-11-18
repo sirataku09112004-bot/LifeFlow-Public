@@ -7,8 +7,8 @@ settings:
   base:
     SWIFT_VERSION: '5.0'
     TARGETED_DEVICE_FAMILY: '1'
-    MARKETING_VERSION: '0.9.15'
-    CURRENT_PROJECT_VERSION: '24'
+    MARKETING_VERSION: '0.9.16'
+    CURRENT_PROJECT_VERSION: '25'
 packages:
   LifeFlowCore:
     path: .
@@ -25,9 +25,9 @@ targets:
         embed: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: local.private.lifeflow
+        PRODUCT_BUNDLE_IDENTIFIER: local.private.lifeflow.widgetprobe
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: LifeFlow
+        INFOPLIST_KEY_CFBundleDisplayName: LifeFlow検証
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         CODE_SIGN_ENTITLEMENTS: Configuration/Widget.entitlements
@@ -59,7 +59,7 @@ targets:
       - package: LifeFlowCore
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: local.private.lifeflow.widget
+        PRODUCT_BUNDLE_IDENTIFIER: local.private.lifeflow.widgetprobe.widget
         INFOPLIST_FILE: Widget/Info.plist
         CODE_SIGN_ENTITLEMENTS: Configuration/Widget.entitlements
         APPLICATION_EXTENSION_API_ONLY: YES
