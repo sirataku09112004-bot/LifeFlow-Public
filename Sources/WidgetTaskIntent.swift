@@ -16,7 +16,7 @@ struct CompleteWidgetTaskInBackgroundIntent: AppIntent {
 
     #if compiler(>=6.4)
     @available(iOS 27.0, *)
-    static var allowedExecutionTargets: IntentExecutionTargets { .widgetKitExtension }
+    static var allowedExecutionTargets: IntentExecutionTargets { .main }
     #endif
 
     @Parameter(title: "タスクID") var taskID: String
@@ -33,7 +33,8 @@ struct CompleteWidgetTaskInBackgroundIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         defer { WidgetCenter.shared.reloadTimelines(ofKind: FlowWidgetContainer.kind) }
-        Self.logger.notice("Widget completion started")
+        let target = Bundle.main.bundleURL.pathExtension == "appex" ? "widget extension" : "main app"
+        Self.logger.notice("Widget completion started in \(target, privacy: .public)")
         record("ウィジェットから丸の操作を受け取りました")
         guard let id = UUID(uuidString: taskID),
               let occurrence = day(from: occurrenceStamp), let displayed = day(from: displayedStamp) else {
