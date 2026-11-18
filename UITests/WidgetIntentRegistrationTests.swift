@@ -8,6 +8,7 @@ final class WidgetIntentRegistrationTests: XCTestCase {
         guard #available(iOS 27.0, *) else { throw XCTSkip("App Intents Testing requires iOS 27.") }
 
         let app = XCUIApplication()
+        app.launchEnvironment["LIFEFLOW_UI_TEST_STORE"] = UUID().uuidString
         app.launch()
 
         let definitions = IntentDefinitions(bundleIdentifier: "local.private.lifeflow")
