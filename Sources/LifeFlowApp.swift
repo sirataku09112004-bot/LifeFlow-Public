@@ -38,7 +38,7 @@ import SwiftUI
                 .onReceive(timer) { now in
                     if phase == .active && store.ready {
                         store.reminders.markOpened(now: now, clock: store.clock, tasks: store.data.tasks)
-                        store.roll()
+                        store.refreshToday()
                     }
                 }
         }
@@ -48,7 +48,7 @@ import SwiftUI
         guard store.ready else { return }
         store.synchronizeWidgetChanges()
         store.reminders.markOpened(now: Date(), clock: store.clock, tasks: store.data.tasks)
-        store.roll()
+        store.refreshToday()
         store.reminders.update(store.data.tasks)
         store.refreshWidget()
     }
@@ -72,6 +72,7 @@ struct FlowHome: View {
     @State private var categoryFilter: FlowCategoryFilter = .all
     @State private var showingProgress = false
     @State private var showingNotifications = false
+    @State private var showingAppleReminders = false
     @State private var showingCategoryButtons = false
     @State private var editing: FlowTask?
     @State private var deleting: FlowTask?
@@ -150,6 +151,7 @@ struct FlowHome: View {
                         Button("振り返り・履歴") { showingProgress = true }
                         Button("ToDoを検索") { showingSearch = true }
                         Button("通知設定") { showingNotifications = true }
+                        Button("標準リマインダー連携") { showingAppleReminders = true }
                         Button("カテゴリを管理") { showingCategoryButtons = true }
                         Menu("ウィジェット設定") {
                             Toggle("ウィジェットにToDo名を表示", isOn: Binding(
@@ -208,6 +210,7 @@ struct FlowHome: View {
             .sheet(item: $editing) { task in TaskEditor(task: task).environmentObject(store) }
             .sheet(isPresented: $showingProgress) { FlowProgressView().environmentObject(store) }
             .sheet(isPresented: $showingNotifications) { FlowNotificationSettings(reminders: store.reminders).environmentObject(store) }
+            .sheet(isPresented: $showingAppleReminders) { FlowAppleRemindersSettings(link: store.appleReminders, store: store) }
             .sheet(isPresented: $showingCategoryButtons) { FlowCategoryManager(names: store.data.registeredCategories).environmentObject(store) }
             .fileExporter(isPresented: $exporter, document: document, contentType: .json, defaultFilename: "LifeFlow-backup") { result in
                 if case .failure(let e) = result { store.error = e.localizedDescription }

@@ -29,5 +29,9 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>今日のToDoを専用リストへ表示し、完了をLifeFlowに取り込むために使います。</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>今日のToDoを専用リストへ表示し、完了をLifeFlowに取り込むために使います。</string>
 </dict>
 </plist>

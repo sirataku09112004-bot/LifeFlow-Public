@@ -34,6 +34,17 @@ final class PlanningUITests: XCTestCase {
         XCTAssertEqual(count.label, "0 / 4件達成")
     }
 
+    @MainActor
+    func testAppleRemindersLinkOpensWithSharingDisabled() {
+        let app = launch()
+        app.buttons["設定"].tap()
+        app.buttons["標準リマインダー連携"].tap()
+        let sharing = app.switches["今日のToDoをリマインダーに表示"]
+        XCTAssertTrue(sharing.waitForExistence(timeout: 8))
+        XCTAssertEqual(sharing.value as? String, "0")
+        XCTAssertTrue(app.staticTexts["ホーム画面で使う"].exists)
+    }
+
     func testReorderPersistsAcrossRelaunch() {
         let app = launch()
         app.buttons["today-reorder"].tap()

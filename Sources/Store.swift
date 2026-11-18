@@ -48,6 +48,7 @@ struct BackupDocument: FileDocument {
     var widgetEnabled: Bool { FlowWidgetContainer.file != nil }
     let clock = FlowClock()
     let reminders = FlowReminders()
+    let appleReminders = FlowAppleRemindersLink()
     private let url: URL
     private let usesSharedDataFile: Bool
     private var sharedBase: Data?
@@ -121,7 +122,7 @@ struct BackupDocument: FileDocument {
                 needsMigrationCopy = try JSONDecoder().decode(SchemaHeader.self, from: bytes).schemaVersion < FlowData.currentSchema
             }
             ready = true
-            roll()
+            if !appleReminders.enabled { roll() }
             reminders.update(data.tasks)
         } catch { self.error = "保存データを読み込めません。元ファイルを保護しています。バックアップから復元してください。\n\(error.localizedDescription)" }
     }
@@ -131,7 +132,8 @@ struct BackupDocument: FileDocument {
     static func decode(_ bytes: Data) throws -> FlowData {
         try FlowWidgetSharedDataFile.decode(bytes)
     }
-    @discardableResult private func commit(_ candidate: FlowData, restoring: Bool = false) -> Bool {
+    @discardableResult private func commit(_ candidate: FlowData, restoring: Bool = false,
+                                           updateAppleReminders: Bool = true) -> Bool {
         guard ready || restoring else { return false }
         do {
             var validated = try candidate.validated()
@@ -168,6 +170,7 @@ struct BackupDocument: FileDocument {
             data = validated; ready = true; error = nil
             reminders.update(data.tasks)
             refreshWidget()
+            if updateAppleReminders { appleReminders.scheduleSync(store: self) }
             return true
         } catch SharedWriteError.changed {
             synchronizeWidgetChanges()
@@ -208,6 +211,23 @@ struct BackupDocument: FileDocument {
         }
         if next.tasks != data.tasks { commit(next) }
         else if widgetDay != clock.today() { refreshWidget() }
+    }
+
+    func refreshToday() {
+        if appleReminders.enabled { appleReminders.scheduleSync(store: self) }
+        else { roll() }
+    }
+
+    func importAppleReminderCompletions(_ incoming: [(FlowAppleReminderReference, Date?)]) -> Int? {
+        guard ready else { return nil }
+        synchronizeWidgetChanges()
+        let now = Date()
+        var next = data
+        var imported = 0
+        for (reference, completion) in incoming {
+            if reference.complete(in: &next, at: completion, now: now, clock: clock) { imported += 1 }
+        }
+        return imported == 0 || commit(next, updateAppleReminders: false) ? imported : nil
     }
     @discardableResult func save(_ task: FlowTask) -> Bool {
         var next = data
