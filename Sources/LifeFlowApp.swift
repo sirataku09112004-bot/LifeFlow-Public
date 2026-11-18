@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftUI
 
 @main @MainActor struct LifeFlowApp: App {
@@ -7,6 +8,10 @@ import SwiftUI
     @State private var pendingWidgetCompletion: FlowWidgetRoute?
     @Environment(\.scenePhase) private var phase
     private let timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+
+    init() {
+        if #available(iOS 17.0, *) { LifeFlowProbeShortcuts.updateAppShortcutParameters() }
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -158,7 +163,10 @@ struct FlowHome: View {
                             Toggle("丸を押すとアプリを開く", isOn: Binding(
                                 get: { store.widgetOpensForCompletion }, set: { store.setWidgetOpensForCompletion($0) }
                             )).disabled(!store.widgetEnabled)
-                            Button("ウィジェットを更新") { store.refreshWidget(force: true) }
+                            Button("ウィジェットを更新") {
+                                if #available(iOS 17.0, *) { LifeFlowProbeShortcuts.updateAppShortcutParameters() }
+                                store.refreshWidget(force: true)
+                            }
                             Button("最後のウィジェット操作") { store.error = store.widgetDiagnostics }
                         }
                         Divider()

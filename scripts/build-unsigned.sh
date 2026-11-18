@@ -23,10 +23,13 @@ test -d "$EXTENSION"
 python3 - "$APP_STAGE" "$EXTENSION" <<'PY'
 import json
 import pathlib
+import plistlib
 import sys
 
 host, widget = map(pathlib.Path, sys.argv[1:])
 intent = "CompleteSharedWidgetTaskIntent"
+assert plistlib.loads((host / "Info.plist").read_bytes())["CFBundleIdentifier"] == "local.private.lifeflow"
+assert plistlib.loads((widget / "Info.plist").read_bytes())["CFBundleIdentifier"] == "local.private.lifeflow.widget"
 
 def actions(bundle):
     path = bundle / "Metadata.appintents" / "extract.actionsdata"
@@ -38,6 +41,13 @@ assert host_action["fullyQualifiedTypeName"] == "LifeFlowCore." + intent
 assert host_action["mangledTypeNameV2"] == widget_action["mangledTypeNameV2"]
 assert host_action["openAppWhenRun"] is False and widget_action["openAppWhenRun"] is False
 print("Verified shared widget completion type in the app and widget metadata")
+diagnostic = "CheckLifeFlowWidgetRegistrationIntent"
+assert actions(host)[diagnostic]["openAppWhenRun"] is False
+assert actions(widget)[diagnostic]["openAppWhenRun"] is False
+manifest_path = host / "Metadata.appintents" / "extract.actionsdata"
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+assert any(shortcut["actionIdentifier"] == diagnostic for shortcut in manifest["autoShortcuts"])
+print("Verified the no-op shortcut and widget diagnostic action")
 PY
 
 # AltStore discovers capabilities from the executable's signature. Ad-hoc

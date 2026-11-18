@@ -89,9 +89,20 @@ private struct TodayWidgetView: View {
 
     private func layout(rowHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("今日のToDo")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(ink)
+            HStack {
+                Text("今日のToDo")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(ink)
+                Spacer(minLength: 0)
+                if #available(iOS 17.0, *) {
+                    Button(intent: CheckLifeFlowWidgetRegistrationIntent()) {
+                        Image(systemName: "waveform.path").font(.caption).frame(width: 32, height: 18)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("操作診断")
+                    .accessibilityIdentifier("widget-registration-probe")
+                }
+            }
             if let day = entry.day {
                 Text("残り \(day.remaining)件 · \(day.percent)%達成")
                     .font(.system(size: 9))
