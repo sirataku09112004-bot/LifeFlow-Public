@@ -20,7 +20,16 @@ enum FlowWidgetContainer {
     static var dataFile: URL? {
         file?.deletingLastPathComponent().appendingPathComponent("lifeflow.shared.json")
     }
+
+    static var resultFile: URL? {
+        file?.deletingLastPathComponent().appendingPathComponent("widget-action-result.json")
+    }
     #endif
+}
+
+struct FlowWidgetActionReport: Codable {
+    let date: Date
+    let message: String
 }
 
 struct FlowWidgetRoute {

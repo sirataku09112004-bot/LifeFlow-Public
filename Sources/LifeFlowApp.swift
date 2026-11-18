@@ -1,24 +1,12 @@
-import AppIntents
 import SwiftUI
 
 @main @MainActor struct LifeFlowApp: App {
-    @StateObject private var store: FlowStore
+    @StateObject private var store = FlowStore()
     @State private var tab = 0
     @State private var linkedTask: FlowTask?
     @State private var pendingWidgetCompletion: FlowWidgetRoute?
     @Environment(\.scenePhase) private var phase
     private let timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
-
-    init() {
-        let store = FlowStore()
-        _store = StateObject(wrappedValue: store)
-        if #available(iOS 17.2, *) {
-            let completeTask: WidgetTaskCompletion = { id, occurrenceDay, displayedDay in
-                store.completeWidgetTask(id, occurrenceDay: occurrenceDay, displayedDay: displayedDay)
-            }
-            AppDependencyManager.shared.add(dependency: completeTask)
-        }
-    }
 
     var body: some Scene {
         WindowGroup {
@@ -58,6 +46,7 @@ import SwiftUI
 
     private func opened() {
         guard store.ready else { return }
+        store.synchronizeWidgetChanges()
         store.reminders.markOpened(now: Date(), clock: store.clock, tasks: store.data.tasks)
         store.roll()
         store.reminders.update(store.data.tasks)
@@ -166,9 +155,12 @@ struct FlowHome: View {
                             Toggle("ウィジェットにToDo名を表示", isOn: Binding(
                                 get: { store.widgetShowsTitles }, set: { store.setWidgetShowsTitles($0) }
                             )).disabled(!store.widgetEnabled)
+                            Toggle("丸を押すとアプリを開く", isOn: Binding(
+                                get: { store.widgetOpensForCompletion }, set: { store.setWidgetOpensForCompletion($0) }
+                            )).disabled(!store.widgetEnabled)
                             Button("ウィジェットを更新") { store.refreshWidget(force: true) }
                             Button("最後のウィジェット操作") {
-                                store.error = store.lastWidgetAction ?? "この起動中にウィジェットから受け取った操作はありません。"
+                                store.error = store.lastWidgetAction ?? "ウィジェットから受け取った操作はまだありません。"
                             }
                         }
                         Divider()

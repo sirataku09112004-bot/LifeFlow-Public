@@ -5,6 +5,7 @@ private struct TodayEntry: TimelineEntry {
     let date: Date
     let day: FlowWidgetDay?
     var sharedStorageAvailable = true
+    var opensForCompletion = false
 }
 
 private struct TodayProvider: TimelineProvider {
@@ -15,19 +16,21 @@ private struct TodayProvider: TimelineProvider {
     func getSnapshot(in context: Context, completion: @escaping (TodayEntry) -> Void) {
         let now = Date()
         let file = FlowWidgetContainer.file
+        let snapshot = read(file, now: now, clock: FlowClock())
         completion(context.isPreview ? placeholder(in: context) :
-            TodayEntry(date: now, day: read(file)?.entry(now: now, clock: FlowClock()),
-                       sharedStorageAvailable: file != nil))
+            TodayEntry(date: now, day: snapshot?.entry(now: now, clock: FlowClock()),
+                       sharedStorageAvailable: file != nil, opensForCompletion: snapshot?.opensForCompletion ?? false))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<TodayEntry>) -> Void) {
         let now = Date()
         let clock = FlowClock()
         let file = FlowWidgetContainer.file
-        let snapshot = read(file)
+        let snapshot = read(file, now: now, clock: clock)
+        let opensForCompletion = snapshot?.opensForCompletion ?? false
         let today = clock.today(now)
         let current = TodayEntry(date: now, day: snapshot?.entry(now: now, clock: clock),
-                                 sharedStorageAvailable: file != nil)
+                                 sharedStorageAvailable: file != nil, opensForCompletion: opensForCompletion)
         var entries = [current]
         guard current.day != nil else {
             completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(15 * 60))))
@@ -37,7 +40,7 @@ private struct TodayProvider: TimelineProvider {
             guard let day = clock.calendar.date(byAdding: .day, value: offset, to: today),
                   let boundary = clock.calendar.date(bySettingHour: 4, minute: 0, second: 0, of: day),
                   let next = snapshot?.entry(now: boundary, clock: clock) else { break }
-            entries.append(TodayEntry(date: boundary, day: next))
+            entries.append(TodayEntry(date: boundary, day: next, opensForCompletion: opensForCompletion))
         }
         let finalDay = entries.last?.day?.day ?? today
         let nextDay = clock.calendar.date(byAdding: .day, value: 1, to: finalDay) ?? finalDay
@@ -46,9 +49,16 @@ private struct TodayProvider: TimelineProvider {
         completion(Timeline(entries: entries, policy: .after(boundary)))
     }
 
-    private func read(_ file: URL?) -> FlowWidgetSnapshot? {
-        guard let file, let bytes = try? FlowWidgetSharedDataFile.readData(from: file) else { return nil }
-        return try? JSONDecoder().decode(FlowWidgetSnapshot.self, from: bytes)
+    private func read(_ file: URL?, now: Date, clock: FlowClock) -> FlowWidgetSnapshot? {
+        guard let file, let bytes = try? FlowWidgetSharedDataFile.readData(from: file),
+              let snapshot = try? JSONDecoder().decode(FlowWidgetSnapshot.self, from: bytes) else { return nil }
+        guard let dataFile = FlowWidgetContainer.dataFile,
+              let sharedBytes = try? FlowWidgetSharedDataFile.readData(from: dataFile),
+              let data = try? FlowWidgetSharedDataFile.decode(sharedBytes) else { return snapshot }
+        // Keep the display preference in the snapshot; get task state from the shared save.
+        return FlowWidgetSnapshot(data: data, now: now, clock: clock,
+                                  showTitles: snapshot.days.first?.titlesVisible ?? false,
+                                  opensForCompletion: snapshot.opensForCompletion ?? false)
     }
 }
 
@@ -143,16 +153,14 @@ private struct TodayWidgetView: View {
 
     @ViewBuilder
     private func completionButton(for task: FlowWidgetDay.Task, displayedDay: Date, height: CGFloat) -> some View {
-        if #available(iOS 27.0, *), let occurrenceDay = task.occurrenceDay {
-            completionLink(for: task, occurrenceDay: occurrenceDay, displayedDay: displayedDay, height: height)
-        } else if #available(iOS 17.2, *), let occurrenceDay = task.occurrenceDay {
-            Button(intent: CompleteWidgetTaskIntent(taskID: task.id, occurrenceDay: occurrenceDay,
-                                                   displayedDay: displayedDay)) {
+        if #available(iOS 17.0, *), !entry.opensForCompletion, let occurrenceDay = task.occurrenceDay {
+            Button(intent: CompleteWidgetTaskInBackgroundIntent(taskID: task.id, occurrenceDay: occurrenceDay,
+                                                               displayedDay: displayedDay)) {
                 circle(height)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("「\(task.title)」を達成")
-            .privacySensitive()
+            .accessibilityLabel("ToDoを達成")
+        } else if #available(iOS 27.0, *), let occurrenceDay = task.occurrenceDay {
+            completionLink(for: task, occurrenceDay: occurrenceDay, displayedDay: displayedDay, height: height)
         } else if family != .systemSmall, let occurrenceDay = task.occurrenceDay {
             completionLink(for: task, occurrenceDay: occurrenceDay, displayedDay: displayedDay, height: height)
         } else {

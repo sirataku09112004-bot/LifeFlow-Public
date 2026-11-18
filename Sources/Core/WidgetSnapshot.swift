@@ -23,9 +23,11 @@ struct FlowWidgetDay: Codable, Equatable {
 struct FlowWidgetSnapshot: Codable, Equatable {
     let timeZone: String
     let days: [FlowWidgetDay]
+    let opensForCompletion: Bool?
 
-    init(data: FlowData, now: Date, clock: FlowClock, showTitles: Bool) {
+    init(data: FlowData, now: Date, clock: FlowClock, showTitles: Bool, opensForCompletion: Bool = false) {
         timeZone = clock.calendar.timeZone.identifier
+        self.opensForCompletion = opensForCompletion
         let today = clock.today(now)
         var entries: [FlowWidgetDay] = []
         for offset in 0..<7 {

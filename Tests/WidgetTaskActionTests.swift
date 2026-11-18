@@ -60,4 +60,31 @@ final class WidgetTaskActionTests: XCTestCase {
                                                       displayedDay: clock.today(after), data: data,
                                                       now: after, clock: clock))
     }
+
+    #if os(iOS) || os(macOS)
+    func testBackgroundCompletionPersistsHistoryAndPreservesOtherTasks() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("shared.json")
+        let now = date("2026-11-16T20:00:00")
+        let today = clock.today(now)
+        let task = FlowTask(title: "毎日", day: today, repeatRule: .daily)
+        let other = FlowTask(title: "別のタスク", day: today)
+        XCTAssertNil(try FlowWidgetSharedDataFile.readIfPresent(from: url))
+        try FlowWidgetSharedDataFile.writeData(FlowWidgetSharedDataFile.encode(FlowData(tasks: [task, other])),
+                                               to: url, sharedGroup: true)
+        XCTAssertTrue(try FlowWidgetSharedDataFile.completeTask(task.id, occurrenceDay: task.day,
+            displayedDay: today, at: url, now: now, clock: clock))
+
+        let savedBytes = try FlowWidgetSharedDataFile.readData(from: url)
+        let saved = try FlowWidgetSharedDataFile.decode(savedBytes)
+        XCTAssertEqual(saved.history.map(\.taskID), [task.id])
+        XCTAssertEqual(saved.tasks.first(where: { $0.id == task.id })?.day, date("2026-11-17T00:00:00"))
+        XCTAssertEqual(saved.tasks.first(where: { $0.id == other.id }), other)
+        XCTAssertFalse(try FlowWidgetSharedDataFile.completeTask(task.id, occurrenceDay: task.day,
+            displayedDay: today, at: url, now: now, clock: clock))
+        XCTAssertEqual(try FlowWidgetSharedDataFile.readData(from: url), savedBytes)
+    }
+    #endif
 }
