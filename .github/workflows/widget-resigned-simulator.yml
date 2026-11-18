@@ -1,0 +1,80 @@
+name: Test widget after a bundle identifier change
+on:
+  push:
+    branches: [diagnostic/widget-resigned-simulator]
+permissions:
+  contents: read
+jobs:
+  renamed:
+    runs-on: xcode-27
+    timeout-minutes: 25
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - run: command -v xcodegen >/dev/null || brew install xcodegen
+      - name: Test the widget with simulator-only bundle identifiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          device="$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]["com.apple.CoreSimulator.SimRuntime.iOS-27-0"]
+          phones = [device for device in devices if device["name"].startswith("iPhone")]
+          print(next((device for device in phones if "Pro Max" in device["name"]), phones[0])["udid"])
+          ')"
+          echo "SIMULATOR_ID=$device" >> "$GITHUB_ENV"
+          xcodegen generate
+          destination="platform=iOS Simulator,id=$device"
+          xcodebuild -project LifeFlow.xcodeproj -scheme LifeFlow -configuration Debug \
+            -destination "$destination" -derivedDataPath build/simulator build-for-testing
+
+          products=build/simulator/Build/Products
+          app="$products/Debug-iphonesimulator/LifeFlow.app"
+          widget="$app/PlugIns/LifeFlowWidget.appex"
+          xctestrun=("$products"/*.xctestrun)
+          test "${#xctestrun[@]}" -eq 1
+          python3 - "$app" "$widget" "${xctestrun[0]}" <<'PY'
+          import pathlib
+          import plistlib
+          import sys
+
+          app, widget, configuration = map(pathlib.Path, sys.argv[1:])
+          original_app = "local.private.lifeflow"
+          renamed_app = original_app + ".LFSIM00001"
+
+          for bundle, suffix in ((app, ""), (widget, ".widget")):
+              path = bundle / "Info.plist"
+              info = plistlib.loads(path.read_bytes())
+              assert info["CFBundleIdentifier"] == original_app + suffix
+              info["CFBundleIdentifier"] = renamed_app + suffix
+              path.write_bytes(plistlib.dumps(info, fmt=plistlib.FMT_BINARY, sort_keys=False))
+
+          def update_test_target(node):
+              if isinstance(node, dict):
+                  if str(node.get("UITargetAppPath", "")).endswith("/LifeFlow.app"):
+                      node["UITargetAppBundleIdentifier"] = renamed_app
+                      return 1
+                  return sum(update_test_target(value) for value in node.values())
+              if isinstance(node, list):
+                  return sum(update_test_target(value) for value in node)
+              return 0
+
+          tests = plistlib.loads(configuration.read_bytes())
+          assert update_test_target(tests) == 1
+          configuration.write_bytes(plistlib.dumps(tests, fmt=plistlib.FMT_XML, sort_keys=False))
+          PY
+
+          codesign --force --sign - --preserve-metadata=entitlements --timestamp=none "$widget"
+          codesign --force --sign - --preserve-metadata=entitlements --timestamp=none "$app"
+          codesign --verify --deep --strict "$app"
+          xcodebuild test-without-building -xctestrun "${xctestrun[0]}" \
+            -destination "$destination" -parallel-testing-enabled NO \
+            -only-testing:LifeFlowUITests/HomeScreenWidgetTests/testSmallWidgetCompletesToDoWithoutOpeningLifeFlow
+      - name: Read widget dispatch logs
+        if: always() && env.SIMULATOR_ID != ''
+        run: |
+          xcrun simctl spawn "$SIMULATOR_ID" log show --last 15m --style compact --info --debug \
+            --predicate 'eventMessage CONTAINS "CompleteLifeFlowWidgetTaskIntent" OR eventMessage CONTAINS "Widget completion started"'
