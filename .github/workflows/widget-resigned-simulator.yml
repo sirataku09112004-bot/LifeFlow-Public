@@ -70,6 +70,7 @@ jobs:
           codesign --force --sign - --preserve-metadata=entitlements --timestamp=none "$widget"
           codesign --force --sign - --preserve-metadata=entitlements --timestamp=none "$app"
           codesign --verify --deep --strict "$app"
+          xcrun simctl bootstatus "$device" -b
           xcodebuild test-without-building -xctestrun "${xctestrun[0]}" \
             -destination "$destination" -parallel-testing-enabled NO \
             -only-testing:LifeFlowUITests/HomeScreenWidgetTests/testSmallWidgetCompletesToDoWithoutOpeningLifeFlow
