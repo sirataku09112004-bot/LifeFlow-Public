@@ -14,6 +14,7 @@ struct BackupDocument: FileDocument {
     @Published var error: String?
     @Published private(set) var ready = false
     @Published private(set) var widgetShowsTitles = UserDefaults.standard.bool(forKey: "widgetShowsTitles")
+    private(set) var lastWidgetAction: String?
     private var widgetSnapshot: FlowWidgetSnapshot?
     private var widgetDay: Date?
     var widgetEnabled: Bool { FlowWidgetContainer.file != nil }
@@ -70,7 +71,7 @@ struct BackupDocument: FileDocument {
                 let today = clock.today()
                 let tomorrow = clock.calendar.date(byAdding: .day, value: 1, to: today)!
                 let fixture = FlowData(tasks: [
-                    FlowTask(title: "A Normal", day: today),
+                    FlowTask(id: UUID(uuidString: "61565EF1-4DD7-4962-B996-949D0E15D75F")!, title: "A Normal", day: today),
                     FlowTask(title: "B Daily", day: today, repeatRule: .daily),
                     FlowTask(title: "C Habit", day: today, category: "習慣", habitGoal: 3),
                     FlowTask(id: UUID(uuidString: "EF6A4AF5-6253-4D4D-B67B-9DC9BFE33F50")!, title: "D Future", day: tomorrow)
@@ -241,16 +242,26 @@ struct BackupDocument: FileDocument {
 
     @discardableResult
     func completeWidgetTask(_ id: UUID, occurrenceDay: Date, displayedDay: Date? = nil) -> Bool {
-        guard ready else { return false }
+        guard ready else {
+            recordWidgetAction("丸ボタンを受け取りましたが、データを読み込めませんでした")
+            return false
+        }
         let now = Date()
         guard let completed = FlowWidgetTaskAction.complete(id, occurrenceDay: occurrenceDay,
                                                             displayedDay: displayedDay,
                                                             data: data, now: now, clock: clock) else {
             error = "ウィジェットの予定が更新されています。表示を更新してから、もう一度お試しください。"
+            recordWidgetAction("丸ボタンを受け取りましたが、現在の予定と一致しませんでした")
             WidgetCenter.shared.reloadTimelines(ofKind: FlowWidgetContainer.kind)
             return false
         }
-        return commit(completed)
+        let saved = commit(completed)
+        recordWidgetAction(saved ? "丸ボタンで達成を保存しました" : "丸ボタンを受け取りましたが、保存できませんでした")
+        return saved
+    }
+
+    func recordWidgetAction(_ message: String) {
+        lastWidgetAction = Date().formatted(date: .omitted, time: .standard) + "  " + message
     }
 
     func planToday(_ id: UUID, enabled: Bool) {

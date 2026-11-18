@@ -12,7 +12,7 @@ import SwiftUI
     init() {
         let store = FlowStore()
         _store = StateObject(wrappedValue: store)
-        if #available(iOS 17.0, *) {
+        if #available(iOS 17.2, *) {
             let completeTask: WidgetTaskCompletion = { id, occurrenceDay, displayedDay in
                 store.completeWidgetTask(id, occurrenceDay: occurrenceDay, displayedDay: displayedDay)
             }
@@ -30,10 +30,12 @@ import SwiftUI
                     guard let route = FlowWidgetRoute(url) else { return }
                     tab = 0
                     if route.taskID != nil, route.occurrenceDay != nil {
+                        store.recordWidgetAction("丸ボタンを受け取りました")
                         pendingWidgetCompletion = route
                         completePendingWidgetTaskIfReady()
                         linkedTask = nil
                     } else {
+                        store.recordWidgetAction(route.taskID == nil ? "今日のToDoを開きました" : "ToDoの編集を開きました")
                         linkedTask = store.data.tasks.first { $0.id == route.taskID }
                     }
                 }
@@ -66,7 +68,7 @@ import SwiftUI
         guard store.ready, let route = pendingWidgetCompletion,
               let id = route.taskID, let occurrenceDay = route.occurrenceDay else { return }
         pendingWidgetCompletion = nil
-        store.completeWidgetTask(id, occurrenceDay: occurrenceDay)
+        store.completeWidgetTask(id, occurrenceDay: occurrenceDay, displayedDay: route.displayedDay)
     }
 }
 struct FlowHome: View {
@@ -165,6 +167,9 @@ struct FlowHome: View {
                                 get: { store.widgetShowsTitles }, set: { store.setWidgetShowsTitles($0) }
                             )).disabled(!store.widgetEnabled)
                             Button("ウィジェットを更新") { store.refreshWidget(force: true) }
+                            Button("最後のウィジェット操作") {
+                                store.error = store.lastWidgetAction ?? "この起動中にウィジェットから受け取った操作はありません。"
+                            }
                         }
                         Divider()
                         Button("JSONバックアップを書き出す") {

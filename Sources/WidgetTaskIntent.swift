@@ -3,7 +3,7 @@ import Foundation
 
 typealias WidgetTaskCompletion = @MainActor @Sendable (UUID, Date, Date) -> Bool
 
-@available(iOS 17.0, *)
+@available(iOS 17.2, *)
 struct CompleteWidgetTaskIntent: AppIntent {
     static var title: LocalizedStringResource = "ToDoを達成"
     static var openAppWhenRun = true

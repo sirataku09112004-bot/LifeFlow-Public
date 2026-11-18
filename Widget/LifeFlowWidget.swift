@@ -143,7 +143,9 @@ private struct TodayWidgetView: View {
 
     @ViewBuilder
     private func completionButton(for task: FlowWidgetDay.Task, displayedDay: Date, height: CGFloat) -> some View {
-        if #available(iOS 17.0, *), let occurrenceDay = task.occurrenceDay {
+        if #available(iOS 27.0, *), let occurrenceDay = task.occurrenceDay {
+            completionLink(for: task, occurrenceDay: occurrenceDay, displayedDay: displayedDay, height: height)
+        } else if #available(iOS 17.2, *), let occurrenceDay = task.occurrenceDay {
             Button(intent: CompleteWidgetTaskIntent(taskID: task.id, occurrenceDay: occurrenceDay,
                                                    displayedDay: displayedDay)) {
                 circle(height)
@@ -152,11 +154,7 @@ private struct TodayWidgetView: View {
             .accessibilityLabel("「\(task.title)」を達成")
             .privacySensitive()
         } else if family != .systemSmall, let occurrenceDay = task.occurrenceDay {
-            Link(destination: FlowWidgetRoute.completionURL(for: task.id, occurrenceDay: occurrenceDay)) {
-                circle(height)
-            }
-            .accessibilityLabel("「\(task.title)」を達成してLifeFlowを開く")
-            .privacySensitive()
+            completionLink(for: task, occurrenceDay: occurrenceDay, displayedDay: displayedDay, height: height)
         } else {
             Image(systemName: "chevron.right")
                 .font(.system(size: 10, weight: .medium))
@@ -164,6 +162,15 @@ private struct TodayWidgetView: View {
                 .frame(width: 24, height: height)
                 .accessibilityHidden(true)
         }
+    }
+
+    private func completionLink(for task: FlowWidgetDay.Task, occurrenceDay: Date,
+                                displayedDay: Date, height: CGFloat) -> some View {
+        Link(destination: FlowWidgetRoute.completionURL(for: task.id, occurrenceDay: occurrenceDay,
+                                                       displayedDay: displayedDay)) {
+            circle(height)
+        }
+        .accessibilityLabel("ToDoを達成してLifeFlowを開く")
     }
 
     private func circle(_ height: CGFloat) -> some View {

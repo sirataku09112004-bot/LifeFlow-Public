@@ -111,10 +111,15 @@ final class PlanningTests: XCTestCase {
         XCTAssertNotNil(FlowWidgetRoute(FlowWidgetRoute.url()))
         XCTAssertNil(FlowWidgetRoute(URL(string: "lifeflow://todo/wrong")!))
         let day = date("2026-11-16T00:00:00")
-        let completion = FlowWidgetRoute(FlowWidgetRoute.completionURL(for: id, occurrenceDay: day))
+        let displayed = date("2026-11-15T00:00:00")
+        let completion = FlowWidgetRoute(FlowWidgetRoute.completionURL(for: id, occurrenceDay: day, displayedDay: displayed))
         XCTAssertEqual(completion?.taskID, id)
         XCTAssertEqual(completion?.occurrenceDay, day)
+        XCTAssertEqual(completion?.displayedDay, displayed)
         XCTAssertNil(FlowWidgetRoute(URL(string: "lifeflow://todo/complete/\(id.uuidString)")!))
+        let legacy = "lifeflow://todo/complete/\(id.uuidString)?day=\(day.timeIntervalSince1970)"
+        XCTAssertEqual(FlowWidgetRoute(URL(string: legacy)!)?.occurrenceDay, day)
+        XCTAssertNil(FlowWidgetRoute(URL(string: legacy + "&shown=nan")!))
         let base = FlowWidgetContainer.identifier
         XCTAssertEqual(FlowWidgetContainer.groupIDs(["group.other", base + ".TEAM"]), [base + ".TEAM", base])
     }

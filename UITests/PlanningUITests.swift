@@ -84,6 +84,31 @@ final class PlanningUITests: XCTestCase {
         XCTAssertEqual(title.value as? String, "D Future")
     }
 
+    @MainActor
+    func testWidgetCompletionLinkSavesToDo() throws {
+        guard #available(iOS 18.4, *) else { throw XCTSkip("OS-level URL opening requires iOS 18.4.") }
+        let app = launch()
+        let calendar = Calendar.current
+        let now = Date()
+        let midnight = calendar.startOfDay(for: now)
+        let today = calendar.component(.hour, from: now) < 4
+            ? calendar.date(byAdding: .day, value: -1, to: midnight)!
+            : midnight
+        let stamp = today.timeIntervalSince1970
+        let url = URL(string: "lifeflow://todo/complete/61565EF1-4DD7-4962-B996-949D0E15D75F?day=\(stamp)&shown=\(stamp)")!
+        XCUIDevice.shared.system.open(url)
+        let prompt = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
+        if prompt.waitForExistence(timeout: 2), prompt.buttons["Open"].exists {
+            prompt.buttons["Open"].tap()
+        }
+        let count = app.staticTexts["today-progress-count"]
+        let updated = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "1 / 3件達成"), object: count)
+        XCTAssertEqual(XCTWaiter.wait(for: [updated], timeout: 10), .completed)
+        app.terminate()
+        app.launch()
+        XCTAssertEqual(app.staticTexts["today-progress-count"].label, "1 / 3件達成")
+    }
+
     private func reveal(_ element: XCUIElement, in app: XCUIApplication, down: Bool = true) {
         for _ in 0..<6 {
             if element.exists && element.isHittable { return }
