@@ -146,7 +146,7 @@ private struct TodayWidgetView: View {
             if let day = entry.day, day.titlesVisible {
                 if let tasks = day.upcomingTasks, !tasks.isEmpty {
                     ForEach(tasks) { task in
-                        upcomingRow(task, height: rowHeight)
+                        upcomingRow(task, displayedDay: day.day, height: rowHeight)
                     }
                 } else {
                     Text(day.upcomingTasks == nil ? "LifeFlowを開いて更新" : "今後の予定はありません")
@@ -158,25 +158,35 @@ private struct TodayWidgetView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private func upcomingRow(_ task: FlowWidgetDay.Task, height: CGFloat) -> some View {
-        Link(destination: FlowWidgetRoute.url(for: task.id)) {
-            HStack(spacing: 4) {
-                if let date = task.occurrenceDay {
-                    Text(date, format: Date.FormatStyle().month(.defaultDigits).day(.defaultDigits)
-                        .locale(Locale(identifier: "ja_JP")))
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(ink)
-                        .lineLimit(1)
-                        .fixedSize()
+    private func upcomingRow(_ task: FlowWidgetDay.Task, displayedDay: Date, height: CGFloat) -> some View {
+        HStack(spacing: 2) {
+            Link(destination: FlowWidgetRoute.url(for: task.id)) {
+                HStack(spacing: 4) {
+                    if let date = task.occurrenceDay {
+                        Text(date, format: Date.FormatStyle().month(.defaultDigits).day(.defaultDigits)
+                            .locale(Locale(identifier: "ja_JP")))
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(ink)
+                            .lineLimit(1)
+                            .fixedSize()
+                    }
+                    taskTitle(task.title)
                 }
-                taskTitle(task.title)
+                .padding(.leading, 4)
+                .privacySensitive()
             }
-            .padding(.horizontal, 4)
-            .frame(height: height)
-            .background(renderingMode == .fullColor ? Color.white : Color.clear,
-                        in: RoundedRectangle(cornerRadius: 6))
-            .privacySensitive()
+            .accessibilityIdentifier("widget-upcoming-task:" + task.title)
+            if task.completionBlocked == true {
+                circle(height, width: 32)
+                    .opacity(0.4)
+                    .accessibilityLabel("現在は達成を記録できません")
+            } else {
+                completionButton(for: task, displayedDay: displayedDay, height: height, trailing: true)
+            }
         }
+        .frame(height: height)
+        .background(renderingMode == .fullColor ? Color.white : Color.clear,
+                    in: RoundedRectangle(cornerRadius: 6))
     }
 
     private func taskRow(_ task: FlowWidgetDay.Task, displayedDay: Date, height: CGFloat) -> some View {
@@ -206,19 +216,21 @@ private struct TodayWidgetView: View {
     }
 
     @ViewBuilder
-    private func completionButton(for task: FlowWidgetDay.Task, displayedDay: Date, height: CGFloat) -> some View {
+    private func completionButton(for task: FlowWidgetDay.Task, displayedDay: Date, height: CGFloat,
+                                  trailing: Bool = false) -> some View {
+        let width: CGFloat = trailing ? 32 : 40
         if #available(iOS 17.0, *), !entry.opensForCompletion, let occurrenceDay = task.occurrenceDay {
             Button(intent: CompleteWidgetTaskInAppIntent(taskID: task.id, occurrenceDay: occurrenceDay,
                                                         displayedDay: displayedDay)) {
-                circle(height)
+                circle(height, width: width)
             }
             .buttonStyle(.borderless)
             .accessibilityLabel("ToDoを達成")
-            .accessibilityIdentifier("widget-complete-task")
+            .accessibilityIdentifier(trailing ? "widget-complete-upcoming-task" : "widget-complete-task")
         } else if #available(iOS 27.0, *), let occurrenceDay = task.occurrenceDay {
-            completionLink(for: task, occurrenceDay: occurrenceDay, displayedDay: displayedDay, height: height)
+            completionLink(for: task, occurrenceDay: occurrenceDay, displayedDay: displayedDay, height: height, width: width)
         } else if family != .systemSmall, let occurrenceDay = task.occurrenceDay {
-            completionLink(for: task, occurrenceDay: occurrenceDay, displayedDay: displayedDay, height: height)
+            completionLink(for: task, occurrenceDay: occurrenceDay, displayedDay: displayedDay, height: height, width: width)
         } else {
             Image(systemName: "chevron.right")
                 .font(.system(size: 10, weight: .medium))
@@ -229,19 +241,19 @@ private struct TodayWidgetView: View {
     }
 
     private func completionLink(for task: FlowWidgetDay.Task, occurrenceDay: Date,
-                                displayedDay: Date, height: CGFloat) -> some View {
+                                displayedDay: Date, height: CGFloat, width: CGFloat) -> some View {
         Link(destination: FlowWidgetRoute.completionURL(for: task.id, occurrenceDay: occurrenceDay,
                                                        displayedDay: displayedDay)) {
-            circle(height)
+            circle(height, width: width)
         }
         .accessibilityLabel("ToDoを達成してLifeFlowを開く")
     }
 
-    private func circle(_ height: CGFloat) -> some View {
+    private func circle(_ height: CGFloat, width: CGFloat) -> some View {
         Image(systemName: "circle")
             .font(.system(size: 14, weight: .medium))
             .foregroundStyle(renderingMode == .fullColor ? accent : ink)
-            .frame(width: 40, height: height)
+            .frame(width: width, height: height)
             .contentShape(Rectangle())
     }
 }

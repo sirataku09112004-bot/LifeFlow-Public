@@ -5,7 +5,21 @@ final class HomeScreenWidgetTests: XCTestCase {
     func testMediumWidgetShowsTodayAndUpcomingSideBySide() throws {
         guard #available(iOS 27.0, *) else { throw XCTSkip("The Home Screen controls are for iOS 27.") }
         continueAfterFailure = false
-        XCUIApplication().launch()
+        let app = XCUIApplication()
+        app.launch()
+        let taskName = "Upcoming \(UUID().uuidString.prefix(6))"
+        let dueDate = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 2, to: Date()))
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy/MM/dd"
+        tap(app.buttons["ToDoを追加"])
+        let title = app.textFields.firstMatch
+        tap(title)
+        title.typeText(taskName + " " + formatter.string(from: dueDate))
+        tap(app.buttons["保存"])
+        tap(app.buttons["設定"])
+        tap(app.buttons["ウィジェット設定"])
+        tap(app.buttons["ウィジェットにToDo名を表示"])
         XCUIDevice.shared.press(.home)
         XCUIDevice.shared.press(.home)
 
@@ -38,9 +52,23 @@ final class HomeScreenWidgetTests: XCTestCase {
         XCTAssertTrue(upcoming.waitForExistence(timeout: 20))
         XCTAssertLessThan(today.frame.midX, upcoming.frame.midX)
         XCTAssertEqual(today.frame.midY, upcoming.frame.midY, accuracy: 2)
+        let taskLabel = tile.descendants(matching: .any).matching(identifier: "widget-upcoming-task:" + taskName).firstMatch
+        XCTAssertTrue(taskLabel.waitForExistence(timeout: 25))
+        let complete = tile.descendants(matching: .any).matching(identifier: "widget-complete-upcoming-task").firstMatch
+        XCTAssertTrue(complete.waitForExistence(timeout: 10))
+        XCTAssertGreaterThan(complete.frame.midX, taskLabel.frame.midX)
+        tap(complete)
+        XCTAssertTrue(tile.staticTexts["今後の予定はありません"].waitForExistence(timeout: 25))
+        XCTAssertEqual(home.state, .runningForeground)
+        XCTAssertNotEqual(app.state, .runningForeground)
         tile.press(forDuration: 1.5)
         tap(home.buttons["Remove Widget"])
         tap(home.buttons["Remove"])
+        app.activate()
+        XCTAssertTrue(app.buttons["undo:\(taskName)"].waitForExistence(timeout: 15))
+        tap(app.buttons["設定"])
+        tap(app.buttons["ウィジェット設定"])
+        tap(app.buttons["ウィジェットにToDo名を表示"])
     }
 
     @MainActor

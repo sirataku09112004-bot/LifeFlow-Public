@@ -7,6 +7,30 @@ final class WidgetTaskActionTests: XCTestCase {
         ISO8601DateFormatter().date(from: value + "+09:00")!
     }
 
+    func testWidgetCanCompleteUpcomingTaskButCannotCompleteNextRepeatOrFutureHabit() throws {
+        let now = date("2026-11-16T20:00:00")
+        let deadline = date("2026-11-18T00:00:00")
+        let upcoming = FlowTask(title: "未来の繰り返しToDo", day: deadline, repeatRule: .daily)
+        let habit = FlowTask(title: "未来の習慣", day: deadline, habitGoal: 3)
+        let data = FlowData(tasks: [upcoming, habit])
+        let completed = try XCTUnwrap(FlowWidgetTaskAction.complete(upcoming.id, occurrenceDay: deadline,
+                                                                    data: data, now: now, clock: clock))
+        XCTAssertEqual(completed.completedToday(now: now, clock: clock).map(\.taskID), [upcoming.id])
+        XCTAssertEqual(completed.history.last?.deadline, deadline)
+        let next = date("2026-11-19T00:00:00")
+        XCTAssertEqual(completed.tasks.first?.day, next)
+        for day in [deadline, next] {
+            XCTAssertNil(FlowWidgetTaskAction.complete(upcoming.id, occurrenceDay: day,
+                                                       data: completed, now: now, clock: clock))
+        }
+        XCTAssertNil(FlowWidgetTaskAction.complete(habit.id, occurrenceDay: deadline,
+                                                  data: data, now: now, clock: clock))
+        let snapshot = FlowWidgetSnapshot(data: completed, now: now, clock: clock, showTitles: true)
+        let visible = try XCTUnwrap(snapshot.days.first?.upcomingTasks)
+        XCTAssertEqual(Set(visible.map(\.id)), Set([upcoming.id, habit.id]))
+        XCTAssertTrue(visible.allSatisfy { $0.completionBlocked == true })
+    }
+
     func testWidgetActionCompletesOnlyTheTappedRepeatingOccurrenceOnce() throws {
         let now = date("2026-11-16T20:00:00")
         let task = FlowTask(title: "毎日のタスク", day: clock.today(now), repeatRule: .daily)

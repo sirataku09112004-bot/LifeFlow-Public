@@ -5,11 +5,13 @@ struct FlowWidgetDay: Codable, Equatable {
         let id: UUID
         let title: String
         let occurrenceDay: Date?
+        let completionBlocked: Bool?
 
-        init(id: UUID, title: String, occurrenceDay: Date? = nil) {
+        init(id: UUID, title: String, occurrenceDay: Date? = nil, completionBlocked: Bool? = nil) {
             self.id = id
             self.title = title
             self.occurrenceDay = occurrenceDay
+            self.completionBlocked = completionBlocked
         }
     }
 
@@ -55,7 +57,10 @@ struct FlowWidgetSnapshot: Codable, Equatable {
             let upcoming = showTitles ? Array(list.all.lazy
                 .filter { !$0.belongsToToday(day, clock: clock) }
                 .prefix(4)
-                .map { FlowWidgetDay.Task(id: $0.id, title: $0.title, occurrenceDay: $0.day) }) : []
+                .map {
+                    FlowWidgetDay.Task(id: $0.id, title: $0.title, occurrenceDay: $0.day,
+                                       completionBlocked: projected.resolutionBlock(for: $0, now: date, clock: clock) != nil)
+                }) : []
             let progress = FlowTodayProgress(data: projected, pending: pending, completed: done,
                                              now: date, clock: clock, category: .all, favoritesOnly: false)
             entries.append(FlowWidgetDay(day: day, remaining: pending.count, percent: progress.percent,

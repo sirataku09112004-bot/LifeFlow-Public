@@ -35,6 +35,26 @@ final class PlanningUITests: XCTestCase {
     }
 
     @MainActor
+    func testCalendarMovesBetweenMonthsAndAddsToSelectedDate() {
+        let app = launch()
+        app.tabBars.buttons["カレンダー"].tap()
+        let next = app.buttons["次の月"]
+        XCTAssertTrue(next.waitForExistence(timeout: 10))
+        next.tap()
+        app.buttons["選択した日にToDoを追加"].tap()
+        let title = app.textFields.firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 8))
+        title.tap()
+        title.typeText("Calendar example")
+        app.buttons["保存"].tap()
+        let example = app.buttons["calendar-task:Calendar example"]
+        XCTAssertTrue(example.waitForExistence(timeout: 10))
+        app.buttons["今日"].tap()
+        XCTAssertTrue(app.buttons["calendar-task:A Normal"].waitForExistence(timeout: 8))
+        XCTAssertFalse(example.exists)
+    }
+
+    @MainActor
     func testAppleRemindersLinkOpensWithSharingDisabled() {
         let app = launch()
         app.buttons["設定"].tap()

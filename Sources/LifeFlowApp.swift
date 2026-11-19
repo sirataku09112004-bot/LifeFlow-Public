@@ -12,6 +12,7 @@ import SwiftUI
         WindowGroup {
             TabView(selection: $tab) {
                 FlowHome().tabItem { Label("ToDo", systemImage: "checklist") }.tag(0)
+                FlowCalendarView().tabItem { Label("カレンダー", systemImage: "calendar") }.tag(2)
                 FlowGoalsView().tabItem { Label("年間目標", systemImage: "target") }.tag(1)
             }.environmentObject(store)
                 .onOpenURL { url in
@@ -126,7 +127,7 @@ struct FlowHome: View {
                 }
             }
             .flowScreen()
-            .navigationTitle(store.clock.label(store.clock.today(now)))
+            .navigationTitle("ToDo")
             .navigationBarTitleDisplayMode(.inline)
             .onChange(of: categories) { names in
                 if case .named(let name) = categoryFilter, !names.contains(name) { categoryFilter = .all }
