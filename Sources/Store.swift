@@ -28,17 +28,22 @@ struct BackupDocument: FileDocument {
     }
     var widgetDiagnostics: String {
         let extensionURL = Bundle.main.builtInPlugInsURL?.appendingPathComponent("LifeFlowWidget.appex")
-        func actionStatus(in bundleURL: URL?) -> String {
+        func actionStatus(_ name: String, in bundleURL: URL?) -> String {
             let metadata = bundleURL?.appendingPathComponent("Metadata.appintents/extract.actionsdata")
             let actions = metadata.flatMap { try? Data(contentsOf: $0) }.flatMap {
                 (try? JSONSerialization.jsonObject(with: $0) as? [String: Any])?["actions"] as? [String: Any]
             }
-            return actions?["CompleteWidgetTaskInAppIntent"] == nil ? "見つかりません" : "あり"
+            return actions?[name] == nil ? "見つかりません" : "あり"
+        }
+        func details(_ name: String) -> String {
+            "アプリ \(actionStatus(name, in: Bundle.main.bundleURL)) ／ ウィジェット \(actionStatus(name, in: extensionURL))"
         }
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "不明"
         return [
             "ビルド \(build)",
-            "操作定義　アプリ \(actionStatus(in: Bundle.main.bundleURL)) ／ ウィジェット \(actionStatus(in: extensionURL))",
+            "達成の定義　\(details("CompleteWidgetTaskInAppIntent"))",
+            "Aの定義　\(details("FlowProbeStandardIntent"))",
+            "Hの定義　\(details("FlowProbeProgressIntent"))",
             "共有データ領域 \(widgetEnabled ? "利用可" : "利用不可")",
             lastWidgetAction ?? "ウィジェットから受け取った操作はまだありません。"
         ].joined(separator: "\n")

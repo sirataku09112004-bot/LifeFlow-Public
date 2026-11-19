@@ -4,7 +4,7 @@ import OSLog
 import WidgetKit
 
 enum FlowWidgetProbe: String, CaseIterable {
-    case standard, widget, app, legacy, foreground, toggle, link
+    case standard, widget, app, legacy, foreground, toggle, link, progress
 
     static let kind = "LifeFlowWidgetProbe"
     static let linkURL = URL(string: "lifeflow://widget-probe")!
@@ -18,6 +18,7 @@ enum FlowWidgetProbe: String, CaseIterable {
         case .foreground: return "E 起動"
         case .toggle: return "F 切替"
         case .link: return "G URL"
+        case .progress: return "H 進捗付き"
         }
     }
 }
@@ -136,6 +137,22 @@ struct FlowProbeLegacyIntent: AppIntent {
 
 @available(iOS, unavailable)
 extension FlowProbeLegacyIntent: ForegroundContinuableIntent {}
+
+@available(iOS 17.0, *)
+struct FlowProbeProgressIntent: AppIntent, ProgressReportingIntent {
+    static let title: LocalizedStringResource = "診断 H 進捗付き"
+    static let isDiscoverable = false
+
+    func perform() async throws -> some IntentResult {
+        progress.totalUnitCount = 1
+        FlowWidgetProbeLog.record(.progress)
+        progress.completedUnitCount = 1
+        return .result()
+    }
+}
+
+@available(iOS, unavailable)
+extension FlowProbeProgressIntent: ForegroundContinuableIntent {}
 
 @available(iOS 17.0, *)
 struct FlowProbeForegroundIntent: AppIntent {

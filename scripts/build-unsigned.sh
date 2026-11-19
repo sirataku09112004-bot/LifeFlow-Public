@@ -39,14 +39,19 @@ assert widget_action["fullyQualifiedTypeName"] == "LifeFlowWidget." + intent
 assert host_action["identifier"] == widget_action["identifier"] == intent
 assert host_action["openAppWhenRun"] is False and widget_action["openAppWhenRun"] is False
 host_actions, widget_actions = actions(host), actions(widget)
-for suffix in ("Standard", "App", "Legacy", "Foreground", "Toggle"):
+for suffix in ("Standard", "App", "Legacy", "Foreground", "Toggle", "Progress"):
     name = f"FlowProbe{suffix}Intent"
     assert host_actions[name]["identifier"] == widget_actions[name]["identifier"] == name
 assert "FlowProbeWidgetIntent" in widget_actions
 assert "FlowProbeWidgetIntent" not in host_actions
 assert host_actions["FlowProbeForegroundIntent"]["openAppWhenRun"] is True
 assert widget_actions["FlowProbeForegroundIntent"]["openAppWhenRun"] is True
-print("Verified six diagnostic action definitions and the regular completion action")
+for bundle_actions in (host_actions, widget_actions):
+    progress_protocols = set(bundle_actions["FlowProbeProgressIntent"]["systemProtocols"])
+    legacy_protocols = set(bundle_actions["FlowProbeLegacyIntent"]["systemProtocols"])
+    assert legacy_protocols == {"com.apple.link.systemProtocol.ForegroundContinuable"}
+    assert progress_protocols == legacy_protocols | {"com.apple.link.systemProtocol.ProgressReporting"}
+print("Verified seven diagnostic action definitions, including the progress-reporting comparison")
 PY
 
 # AltStore discovers capabilities from the executable's signature. Ad-hoc

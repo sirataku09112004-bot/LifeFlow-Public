@@ -72,8 +72,7 @@ private struct LifeFlowProbeView: View {
                 GridRow {
                     Link(destination: FlowWidgetProbe.linkURL) { label(.link) }
                         .accessibilityIdentifier("probe-link")
-                    Text("E・Gは起動確認用").font(.caption2)
-                        .foregroundStyle(.secondary)
+                    button(.progress, intent: FlowProbeProgressIntent())
                 }
             }
         }
