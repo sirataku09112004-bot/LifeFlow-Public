@@ -145,15 +145,8 @@ final class HomeScreenWidgetTests: XCTestCase {
         let editWidget = home.descendants(matching: .any).matching(identifier: "Edit Widget").firstMatch
         tap(editWidget)
 
-        let option = home.descendants(matching: .any)
-            .matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@", "診断用の選択肢", "診断用の選択肢,")).firstMatch
-        let pickChoice = home.buttons.matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@",
-                                                           "Choose", "診断用の選択肢")).firstMatch
-        if pickChoice.exists && pickChoice.isHittable {
-            tap(pickChoice)
-        } else {
-            tap(option)
-        }
+        let pickChoice = home.buttons["診断用の選択肢"].firstMatch
+        tap(pickChoice)
         let dynamicChoice = home.descendants(matching: .any).matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@",
                                                                                                 "診断OK 2", "診断OK 2,")).firstMatch
         XCTAssertTrue(dynamicChoice.waitForExistence(timeout: 20), home.debugDescription)
