@@ -18,7 +18,8 @@ final class HomeScreenWidgetTests: XCTestCase {
         search.typeText("LifeFlow")
         tap(home.cells["LifeFlow"].firstMatch)
 
-        let preview = home.staticTexts.matching(identifier: "今後の予定")
+        let preview = home.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND value == %@",
+                                                        "今日のToDo", "Widget, Medium"))
         for _ in 0..<4 where !preview.allElementsBoundByIndex.contains(where: \.isHittable) {
             let start = home.coordinate(withNormalizedOffset: CGVector(dx: 0.83, dy: 0.51))
             let end = home.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.51))
