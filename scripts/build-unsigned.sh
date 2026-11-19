@@ -26,7 +26,7 @@ import pathlib
 import sys
 
 host, widget = map(pathlib.Path, sys.argv[1:])
-intent = "CompleteSharedWidgetTaskIntent"
+intent = "CompleteWidgetTaskInAppIntent"
 
 def actions(bundle):
     path = bundle / "Metadata.appintents" / "extract.actionsdata"
@@ -34,10 +34,11 @@ def actions(bundle):
 
 host_action = actions(host)[intent]
 widget_action = actions(widget)[intent]
-assert host_action["fullyQualifiedTypeName"] == "LifeFlowCore." + intent
-assert host_action["mangledTypeNameV2"] == widget_action["mangledTypeNameV2"]
+assert host_action["fullyQualifiedTypeName"] == "LifeFlow." + intent
+assert widget_action["fullyQualifiedTypeName"] == "LifeFlowWidget." + intent
+assert host_action["identifier"] == widget_action["identifier"] == intent
 assert host_action["openAppWhenRun"] is False and widget_action["openAppWhenRun"] is False
-print("Verified shared widget completion type in the app and widget metadata")
+print("Verified host and widget metadata for background task completion")
 PY
 
 # AltStore discovers capabilities from the executable's signature. Ad-hoc

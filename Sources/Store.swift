@@ -33,7 +33,7 @@ struct BackupDocument: FileDocument {
             let actions = metadata.flatMap { try? Data(contentsOf: $0) }.flatMap {
                 (try? JSONSerialization.jsonObject(with: $0) as? [String: Any])?["actions"] as? [String: Any]
             }
-            return actions?["CompleteSharedWidgetTaskIntent"] == nil ? "見つかりません" : "あり"
+            return actions?["CompleteWidgetTaskInAppIntent"] == nil ? "見つかりません" : "あり"
         }
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "不明"
         return [

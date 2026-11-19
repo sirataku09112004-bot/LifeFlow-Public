@@ -1,41 +1,33 @@
-#if os(iOS)
 import AppIntents
 import Foundation
 import OSLog
 import WidgetKit
 
 @available(iOS 17.0, *)
-public struct CompleteSharedWidgetTaskIntent: AppIntent {
-    public static let title: LocalizedStringResource = "ウィジェットのToDoを達成"
-    public static let isDiscoverable = false
+struct CompleteWidgetTaskInAppIntent: AppIntent {
+    static let title: LocalizedStringResource = "ウィジェットのToDoを達成"
+    static let isDiscoverable = false
     private static let logger = Logger(subsystem: "local.private.lifeflow", category: "WidgetCompletion")
 
-    #if compiler(>=6.2)
-    @available(iOS 26.0, *)
-    public static var supportedModes: IntentModes { .background }
-    #endif
+    @Parameter(title: "タスクID") var taskID: String
+    @Parameter(title: "予定日") var occurrenceStamp: String
+    @Parameter(title: "表示日") var displayedStamp: String
 
-    #if compiler(>=6.4)
-    @available(iOS 27.0, *)
-    public static var allowedExecutionTargets: IntentExecutionTargets { .main }
-    #endif
+    init() {}
 
-    @Parameter(title: "タスクID") public var taskID: String
-    @Parameter(title: "予定日") public var occurrenceStamp: String
-    @Parameter(title: "表示日") public var displayedStamp: String
-
-    public init() {}
-
-    public init(taskID: UUID, occurrenceDay: Date, displayedDay: Date) {
+    init(taskID: UUID, occurrenceDay: Date, displayedDay: Date) {
         self.taskID = taskID.uuidString
         occurrenceStamp = String(Int(occurrenceDay.timeIntervalSince1970))
         displayedStamp = String(Int(displayedDay.timeIntervalSince1970))
     }
 
-    public func perform() async throws -> some IntentResult {
+    func perform() async throws -> some IntentResult {
+        #if LIFEFLOW_WIDGET_EXTENSION
+        Self.logger.error("Widget completion did not reach the host app")
+        return .result()
+        #else
         defer { WidgetCenter.shared.reloadTimelines(ofKind: FlowWidgetContainer.kind) }
-        let process = Bundle.main.bundleURL.pathExtension == "appex" ? "widget extension" : "main app"
-        Self.logger.notice("Widget completion started in \(process, privacy: .public)")
+        Self.logger.notice("Widget completion started in the host app")
         record("ウィジェットから丸の操作を受け取りました")
         guard let id = UUID(uuidString: taskID),
               let occurrence = day(from: occurrenceStamp), let displayed = day(from: displayedStamp) else {
@@ -58,8 +50,10 @@ public struct CompleteSharedWidgetTaskIntent: AppIntent {
             record("達成を保存できませんでした")
         }
         return .result()
+        #endif
     }
 
+    #if !LIFEFLOW_WIDGET_EXTENSION
     private func day(from stamp: String) -> Date? {
         guard let seconds = Int(stamp) else { return nil }
         let result = Date(timeIntervalSince1970: TimeInterval(seconds))
@@ -73,8 +67,9 @@ public struct CompleteSharedWidgetTaskIntent: AppIntent {
             to: url, sharedGroup: true
         )
     }
+    #endif
 }
 
-@available(iOS 17.0, *)
-public struct LifeFlowSharedIntentPackage: AppIntentsPackage {}
-#endif
+// The widget supplies the button and the app's background process saves the result.
+@available(iOS, unavailable)
+extension CompleteWidgetTaskInAppIntent: ForegroundContinuableIntent {}

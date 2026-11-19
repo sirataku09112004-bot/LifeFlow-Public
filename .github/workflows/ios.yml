@@ -2,7 +2,7 @@ name: Build unsigned LifeFlow IPA
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/apple-reminders-widget]
+    branches: [main, feature/apple-reminders-widget, diagnostic/widget-altstore-dispatch]
 permissions:
   contents: read
 concurrency:

@@ -7,20 +7,14 @@ settings:
   base:
     SWIFT_VERSION: '5.0'
     TARGETED_DEVICE_FAMILY: '1'
-    MARKETING_VERSION: '0.9.18'
-    CURRENT_PROJECT_VERSION: '27'
-packages:
-  LifeFlowCore:
-    path: .
+    MARKETING_VERSION: '0.9.19'
+    CURRENT_PROJECT_VERSION: '28'
 targets:
   LifeFlow:
     type: application
     platform: iOS
-    sources:
-      - path: Sources
-        excludes: [Core/WidgetTaskIntent.swift]
+    sources: [Sources]
     dependencies:
-      - package: LifeFlowCore
       - target: LifeFlowWidget
         embed: true
     settings:
@@ -54,11 +48,10 @@ targets:
       - path: Widget
         excludes: [Info.plist]
       - path: Sources/Core
-        excludes: [WidgetTaskIntent.swift]
-    dependencies:
-      - package: LifeFlowCore
+      - path: Sources/WidgetTaskIntent.swift
     settings:
       base:
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) LIFEFLOW_WIDGET_EXTENSION"
         PRODUCT_BUNDLE_IDENTIFIER: local.private.lifeflow.widget
         INFOPLIST_FILE: Widget/Info.plist
         CODE_SIGN_ENTITLEMENTS: Configuration/Widget.entitlements
