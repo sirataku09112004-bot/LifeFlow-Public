@@ -91,10 +91,13 @@ final class PlanningTests: XCTestCase {
         XCTAssertTrue(data.setPlannedToday(future.id, enabled: true, now: now, clock: clock))
         let snapshot = FlowWidgetSnapshot(data: data, now: now, clock: clock, showTitles: true)
         XCTAssertEqual(snapshot.entry(now: now, clock: clock)?.tasks.map(\.id), [future.id])
+        XCTAssertEqual(snapshot.entry(now: now, clock: clock)?.upcomingTasks?.map(\.id), [upcoming.id])
         XCTAssertEqual(snapshot.entry(now: date("2026-11-17T03:59:59"), clock: clock)?.tasks.map(\.id), [future.id])
         XCTAssertEqual(snapshot.entry(now: date("2026-11-17T04:00:00"), clock: clock)?.tasks.map(\.id), [upcoming.id])
+        XCTAssertEqual(snapshot.entry(now: date("2026-11-17T04:00:00"), clock: clock)?.upcomingTasks?.map(\.id), [future.id])
         let hidden = FlowWidgetSnapshot(data: data, now: now, clock: clock, showTitles: false)
         XCTAssertEqual(hidden.entry(now: now, clock: clock)?.remaining, 1)
+        XCTAssertEqual(hidden.entry(now: now, clock: clock)?.upcomingTasks, [])
         XCTAssertFalse(String(decoding: try JSONEncoder().encode(hidden), as: UTF8.self).contains(future.id.uuidString))
         XCTAssertTrue(data.resolve(future.id, outcome: .completed, now: now, clock: clock))
         let complete = FlowWidgetSnapshot(data: data, now: now, clock: clock, showTitles: true)
@@ -103,6 +106,23 @@ final class PlanningTests: XCTestCase {
         let event = try XCTUnwrap(data.history.last)
         XCTAssertTrue(data.undoCompletion(event.id, now: now, clock: clock))
         XCTAssertEqual(FlowWidgetSnapshot(data: data, now: now, clock: clock, showTitles: true), snapshot)
+    }
+
+    func testWidgetUpcomingShowsFourNearestDatesAndDecodesOldSnapshot() throws {
+        let now = date("2026-11-16T20:00:00")
+        let scheduled = try (1...5).map { offset in
+            let day = try XCTUnwrap(clock.calendar.date(byAdding: .day, value: offset, to: clock.today(now)))
+            return FlowTask(title: "今後のタスク \(offset)", day: day)
+        }
+        let data = FlowData(tasks: Array(scheduled.reversed()))
+        let snapshot = FlowWidgetSnapshot(data: data, now: now, clock: clock, showTitles: true)
+        let today = try XCTUnwrap(snapshot.entry(now: now, clock: clock))
+        XCTAssertEqual(today.remaining, 0)
+        XCTAssertEqual(today.upcomingTasks?.map(\.id), Array(scheduled.prefix(4)).map(\.id))
+        XCTAssertEqual(today.upcomingTasks?.first?.occurrenceDay, scheduled.first?.day)
+        let old = FlowWidgetDay(day: today.day, remaining: 0, percent: 0, titlesVisible: true, tasks: [])
+        let decoded = try JSONDecoder().decode(FlowWidgetDay.self, from: JSONEncoder().encode(old))
+        XCTAssertNil(decoded.upcomingTasks)
     }
 
     func testWidgetRoutingAndAltStoreGroupNames() {

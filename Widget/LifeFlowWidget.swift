@@ -81,12 +81,24 @@ private struct TodayWidgetView: View {
 
     private var content: some View {
         GeometryReader { geometry in
-            layout(rowHeight: min(26, max(14, floor((geometry.size.height - 38) / 4))))
+            let rowHeight = min(26, max(14, floor((geometry.size.height - 38) / 4)))
+            if family == .systemMedium {
+                HStack(alignment: .top, spacing: 6) {
+                    todayColumn(rowHeight: rowHeight)
+                    Rectangle()
+                        .fill(ink.opacity(0.16))
+                        .frame(width: 1)
+                        .accessibilityHidden(true)
+                    upcomingColumn(rowHeight: rowHeight)
+                }
+            } else {
+                todayColumn(rowHeight: rowHeight)
+            }
         }
         .widgetURL(FlowWidgetRoute.url())
     }
 
-    private func layout(rowHeight: CGFloat) -> some View {
+    private func todayColumn(rowHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("今日のToDo")
                 .font(.caption.weight(.bold))
@@ -124,6 +136,47 @@ private struct TodayWidgetView: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func upcomingColumn(rowHeight: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("今後の予定")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(ink)
+            if let day = entry.day, day.titlesVisible {
+                if let tasks = day.upcomingTasks, !tasks.isEmpty {
+                    ForEach(tasks) { task in
+                        upcomingRow(task, height: rowHeight)
+                    }
+                } else {
+                    Text(day.upcomingTasks == nil ? "LifeFlowを開いて更新" : "今後の予定はありません")
+                        .font(.caption2)
+                        .foregroundStyle(ink)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func upcomingRow(_ task: FlowWidgetDay.Task, height: CGFloat) -> some View {
+        Link(destination: FlowWidgetRoute.url(for: task.id)) {
+            HStack(spacing: 4) {
+                if let date = task.occurrenceDay {
+                    Text(date, format: Date.FormatStyle().month(.defaultDigits).day(.defaultDigits)
+                        .locale(Locale(identifier: "ja_JP")))
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(ink)
+                        .lineLimit(1)
+                        .fixedSize()
+                }
+                taskTitle(task.title)
+            }
+            .padding(.horizontal, 4)
+            .frame(height: height)
+            .background(renderingMode == .fullColor ? Color.white : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 6))
+            .privacySensitive()
+        }
     }
 
     private func taskRow(_ task: FlowWidgetDay.Task, displayedDay: Date, height: CGFloat) -> some View {
@@ -199,7 +252,7 @@ struct LifeFlowTodayWidget: Widget {
             TodayWidgetView(entry: entry)
         }
         .configurationDisplayName("今日のToDo")
-        .description("今日の残り件数、達成率とToDoを表示します。")
+        .description("今日の残り件数、達成率とToDoを表示します。中サイズでは今後の予定も確認できます。")
         .supportedFamilies([.systemSmall, .systemMedium])
         .contentMarginsDisabled()
     }

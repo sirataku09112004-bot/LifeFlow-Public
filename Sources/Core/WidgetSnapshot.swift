@@ -18,6 +18,17 @@ struct FlowWidgetDay: Codable, Equatable {
     let percent: Int
     let titlesVisible: Bool
     let tasks: [Task]
+    let upcomingTasks: [Task]?
+
+    init(day: Date, remaining: Int, percent: Int, titlesVisible: Bool, tasks: [Task],
+         upcomingTasks: [Task]? = nil) {
+        self.day = day
+        self.remaining = remaining
+        self.percent = percent
+        self.titlesVisible = titlesVisible
+        self.tasks = tasks
+        self.upcomingTasks = upcomingTasks
+    }
 }
 
 struct FlowWidgetSnapshot: Codable, Equatable {
@@ -41,13 +52,18 @@ struct FlowWidgetSnapshot: Codable, Equatable {
             let list = FlowTaskList(tasks: projected.tasks, query: "", now: date, clock: clock,
                                     todayOrder: projected.todayOrder ?? [])
             let pending = list.today.filter { !doneIDs.contains($0.id) }
+            let upcoming = showTitles ? Array(list.all.lazy
+                .filter { !$0.belongsToToday(day, clock: clock) }
+                .prefix(4)
+                .map { FlowWidgetDay.Task(id: $0.id, title: $0.title, occurrenceDay: $0.day) }) : []
             let progress = FlowTodayProgress(data: projected, pending: pending, completed: done,
                                              now: date, clock: clock, category: .all, favoritesOnly: false)
             entries.append(FlowWidgetDay(day: day, remaining: pending.count, percent: progress.percent,
                                          titlesVisible: showTitles,
                                          tasks: showTitles ? pending.prefix(4).map {
                                              FlowWidgetDay.Task(id: $0.id, title: $0.title, occurrenceDay: $0.day)
-                                         } : []))
+                                         } : [],
+                                         upcomingTasks: upcoming))
         }
         days = entries
     }

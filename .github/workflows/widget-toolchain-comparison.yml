@@ -41,7 +41,7 @@ jobs:
           persist-credentials: false
       - name: Install XcodeGen
         run: command -v xcodegen >/dev/null || brew install xcodegen
-      - name: Test opening the system widget editor and loading the diagnostic options
+      - name: Test the medium widget layout
         shell: bash
         run: |
           set -euo pipefail
@@ -52,7 +52,7 @@ jobs:
           status=0
           xcodebuild -project LifeFlow.xcodeproj -scheme LifeFlow -configuration Debug \
             -destination "platform=iOS Simulator,id=$device" -parallel-testing-enabled NO \
-            -only-testing:LifeFlowUITests/HomeScreenWidgetTests/testEditableWidgetLoadsDynamicProbeOptions \
+            -only-testing:LifeFlowUITests/HomeScreenWidgetTests/testMediumWidgetShowsTodayAndUpcomingSideBySide \
             -derivedDataPath build/configuration-simulator test || status=$?
           xcrun simctl spawn "$device" log show --last 15m --style compact \
             --predicate 'category == "WidgetProbe" OR (process == "linkd" AND eventMessage CONTAINS[c] "local.private.lifeflow")' || true

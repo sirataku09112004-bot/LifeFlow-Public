@@ -2,6 +2,44 @@ import XCTest
 
 final class HomeScreenWidgetTests: XCTestCase {
     @MainActor
+    func testMediumWidgetShowsTodayAndUpcomingSideBySide() throws {
+        guard #available(iOS 27.0, *) else { throw XCTSkip("The Home Screen controls are for iOS 27.") }
+        continueAfterFailure = false
+        XCUIApplication().launch()
+        XCUIDevice.shared.press(.home)
+        XCUIDevice.shared.press(.home)
+
+        let home = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        home.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8)).press(forDuration: 2)
+        tap(home.buttons["Edit"])
+        tap(home.buttons["Add Widget"])
+        let search = home.searchFields.firstMatch
+        tap(search)
+        search.typeText("LifeFlow")
+        tap(home.cells["LifeFlow"].firstMatch)
+
+        let preview = home.staticTexts.matching(identifier: "今後の予定")
+        for _ in 0..<4 where !preview.allElementsBoundByIndex.contains(where: \.isHittable) {
+            let start = home.coordinate(withNormalizedOffset: CGVector(dx: 0.83, dy: 0.51))
+            let end = home.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.51))
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        XCTAssertTrue(preview.allElementsBoundByIndex.contains(where: \.isHittable), home.debugDescription)
+        tap(home.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Add Widget")).firstMatch)
+        tap(home.buttons["Done"])
+
+        let tile = home.icons.matching(NSPredicate(format: "label == %@ AND value == %@", "LifeFlow", "Widget")).firstMatch
+        XCTAssertTrue(tile.waitForExistence(timeout: 20))
+        XCTAssertGreaterThan(tile.frame.width, tile.frame.height * 1.5)
+        let today = tile.staticTexts["今日のToDo"].firstMatch
+        let upcoming = tile.staticTexts["今後の予定"].firstMatch
+        XCTAssertTrue(today.waitForExistence(timeout: 20))
+        XCTAssertTrue(upcoming.waitForExistence(timeout: 20))
+        XCTAssertLessThan(today.frame.midX, upcoming.frame.midX)
+        XCTAssertEqual(today.frame.midY, upcoming.frame.midY, accuracy: 2)
+    }
+
+    @MainActor
     func testSmallWidgetCompletesToDoWithoutOpeningLifeFlow() throws {
         guard #available(iOS 27.0, *) else { throw XCTSkip("The Home Screen controls are for iOS 27.") }
         continueAfterFailure = false
