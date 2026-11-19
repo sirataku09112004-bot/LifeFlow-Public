@@ -4,7 +4,7 @@ import OSLog
 import WidgetKit
 
 enum FlowWidgetProbe: String, CaseIterable {
-    case standard, widget, app, legacy, foreground, toggle, link, progress, configuration
+    case standard, widget, app, legacy, foreground, toggle, link, progress, configuration, configurationTimeline
 
     static let kind = "LifeFlowWidgetProbe"
     static let linkURL = URL(string: "lifeflow://widget-probe")!
@@ -20,6 +20,7 @@ enum FlowWidgetProbe: String, CaseIterable {
         case .link: return "G URL"
         case .progress: return "H 進捗付き"
         case .configuration: return "I 設定の選択肢"
+        case .configurationTimeline: return "J 設定ウィジェットの更新"
         }
     }
 }
@@ -52,7 +53,7 @@ enum FlowWidgetProbeLog {
             do {
                 let receipt = FlowWidgetProbeReceipt(date: date, process: process, shared: true, payloadOK: payloadOK)
                 try FlowWidgetSharedDataFile.writeData(JSONEncoder().encode(receipt), to: url, sharedGroup: true)
-                if probe != .configuration {
+                if probe != .configuration && probe != .configurationTimeline {
                     WidgetCenter.shared.reloadTimelines(ofKind: FlowWidgetProbe.kind)
                 }
                 return
@@ -182,5 +183,43 @@ struct FlowProbeToggleIntent: AppIntent {
     func perform() async throws -> some IntentResult {
         FlowWidgetProbeLog.record(.toggle, payloadOK: value == Self.expected)
         return .result()
+    }
+}
+
+@available(iOS 17.0, *)
+struct FlowProbeConfigurationIntent: WidgetConfigurationIntent {
+    static let title: LocalizedStringResource = "設定読み込み診断"
+
+    @Parameter(title: "診断用の選択肢")
+    var choice: FlowProbeConfigurationChoice?
+}
+
+@available(iOS 17.0, *)
+struct FlowProbeConfigurationChoice: AppEntity {
+    static let typeDisplayRepresentation: TypeDisplayRepresentation = "診断用の選択肢"
+    static let defaultQuery = FlowProbeConfigurationQuery()
+
+    let id: String
+    let label: String
+
+    var displayRepresentation: DisplayRepresentation {
+        DisplayRepresentation(title: "\(label)")
+    }
+
+    static let choices = [
+        Self(id: "first", label: "診断OK 1"),
+        Self(id: "second", label: "診断OK 2"),
+    ]
+}
+
+@available(iOS 17.0, *)
+struct FlowProbeConfigurationQuery: EntityQuery {
+    func entities(for identifiers: [String]) async throws -> [FlowProbeConfigurationChoice] {
+        identifiers.compactMap { id in FlowProbeConfigurationChoice.choices.first { $0.id == id } }
+    }
+
+    func suggestedEntities() async throws -> [FlowProbeConfigurationChoice] {
+        FlowWidgetProbeLog.record(.configuration)
+        return FlowProbeConfigurationChoice.choices
     }
 }

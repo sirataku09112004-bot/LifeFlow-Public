@@ -147,8 +147,16 @@ final class HomeScreenWidgetTests: XCTestCase {
 
         let option = home.descendants(matching: .any)
             .matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@", "診断用の選択肢", "診断用の選択肢,")).firstMatch
-        tap(option)
-        let dynamicChoice = home.staticTexts["診断OK 2"].firstMatch
+        let pickChoice = home.buttons.matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@",
+                                                           "Choose", "診断用の選択肢")).firstMatch
+        if pickChoice.exists && pickChoice.isHittable {
+            tap(pickChoice)
+        } else {
+            tap(option)
+        }
+        let dynamicChoice = home.descendants(matching: .any).matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@",
+                                                                                                "診断OK 2", "診断OK 2,")).firstMatch
+        XCTAssertTrue(dynamicChoice.waitForExistence(timeout: 20), home.debugDescription)
         tap(dynamicChoice)
         XCUIDevice.shared.press(.home)
         XCTAssertTrue(tile.staticTexts["診断OK 2"].waitForExistence(timeout: 30))

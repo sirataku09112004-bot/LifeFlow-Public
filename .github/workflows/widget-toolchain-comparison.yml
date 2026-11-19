@@ -49,7 +49,11 @@ jobs:
           xcodegen generate
           device="$(xcrun simctl list devices available --json | python3 -c 'import json,sys; groups=json.load(sys.stdin)["devices"]; key=next(k for k in groups if k.endswith(".iOS-27-0")); phones=[d for d in groups[key] if d["name"].startswith("iPhone")]; print(next((d for d in phones if "Pro Max" in d["name"]), phones[0])["udid"])')"
           xcrun simctl bootstatus "$device" -b
+          status=0
           xcodebuild -project LifeFlow.xcodeproj -scheme LifeFlow -configuration Debug \
             -destination "platform=iOS Simulator,id=$device" -parallel-testing-enabled NO \
             -only-testing:LifeFlowUITests/HomeScreenWidgetTests/testEditableWidgetLoadsDynamicProbeOptions \
-            -derivedDataPath build/configuration-simulator test
+            -derivedDataPath build/configuration-simulator test || status=$?
+          xcrun simctl spawn "$device" log show --last 15m --style compact \
+            --predicate 'category == "WidgetProbe" OR (process == "linkd" AND eventMessage CONTAINS[c] "local.private.lifeflow")' || true
+          exit "$status"
