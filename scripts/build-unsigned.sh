@@ -51,7 +51,12 @@ for bundle_actions in (host_actions, widget_actions):
     legacy_protocols = set(bundle_actions["FlowProbeLegacyIntent"]["systemProtocols"])
     assert legacy_protocols == {"com.apple.link.systemProtocol.ForegroundContinuable"}
     assert progress_protocols == legacy_protocols | {"com.apple.link.systemProtocol.ProgressReporting"}
-print("Verified seven diagnostic action definitions, including the progress-reporting comparison")
+configuration = widget_actions["FlowProbeConfigurationIntent"]
+assert configuration["identifier"] == "FlowProbeConfigurationIntent"
+assert configuration["parameters"][0]["name"] == "choice"
+assert configuration["parameters"][0]["dynamicOptionsSupport"] != 0
+assert "FlowProbeConfigurationIntent" not in host_actions
+print("Verified the standard probe and the widget's dynamic configuration in the IPA")
 PY
 
 # AltStore discovers capabilities from the executable's signature. Ad-hoc

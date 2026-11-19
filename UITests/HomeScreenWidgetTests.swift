@@ -111,6 +111,60 @@ final class HomeScreenWidgetTests: XCTestCase {
     }
 
     @MainActor
+    func testEditableWidgetLoadsDynamicProbeOptions() throws {
+        guard #available(iOS 27.0, *) else { throw XCTSkip("The Home Screen controls are for iOS 27.") }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        XCUIDevice.shared.press(.home)
+        XCUIDevice.shared.press(.home)
+
+        let home = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        home.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8)).press(forDuration: 2)
+        tap(home.buttons["Edit"])
+        tap(home.buttons["Add Widget"])
+        let search = home.searchFields.firstMatch
+        tap(search)
+        search.typeText("LifeFlow")
+        tap(home.cells["LifeFlow"].firstMatch)
+
+        let preview = home.staticTexts.matching(identifier: "設定読み込み診断")
+        for _ in 0..<5 where !preview.allElementsBoundByIndex.contains(where: \.isHittable) {
+            let start = home.coordinate(withNormalizedOffset: CGVector(dx: 0.83, dy: 0.51))
+            let end = home.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.51))
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        XCTAssertTrue(preview.allElementsBoundByIndex.contains(where: \.isHittable), home.debugDescription)
+        tap(home.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Add Widget")).firstMatch)
+        tap(home.buttons["Done"])
+
+        let tile = home.icons.matching(NSPredicate(format: "label == %@ AND value == %@", "LifeFlow", "Widget")).firstMatch
+        XCTAssertTrue(tile.waitForExistence(timeout: 20))
+        XCTAssertTrue(tile.staticTexts["編集で選択"].waitForExistence(timeout: 20))
+        tile.press(forDuration: 1.5)
+        let editWidget = home.descendants(matching: .any).matching(identifier: "Edit Widget").firstMatch
+        tap(editWidget)
+
+        let option = home.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@", "診断用の選択肢", "診断用の選択肢,")).firstMatch
+        tap(option)
+        let dynamicChoice = home.staticTexts["診断OK 2"].firstMatch
+        tap(dynamicChoice)
+        XCUIDevice.shared.press(.home)
+        XCTAssertTrue(tile.staticTexts["診断OK 2"].waitForExistence(timeout: 30))
+
+        app.activate()
+        tap(app.buttons["設定"])
+        tap(app.buttons["ウィジェット設定"])
+        tap(app.buttons["ウィジェット診断結果"])
+        let receipt = app.descendants(matching: .any).matching(identifier: "probe-result-configuration").firstMatch
+        if !receipt.isHittable { app.swipeUp() }
+        XCTAssertTrue(receipt.waitForExistence(timeout: 10))
+        let value = try XCTUnwrap(receipt.value as? String)
+        XCTAssertTrue(value.contains("拡張") || value.contains("本体"), value)
+    }
+
+    @MainActor
     private func tap(_ element: XCUIElement) {
         XCTAssertTrue(element.waitForExistence(timeout: 20), "Missing element: \(element)")
         element.tap()

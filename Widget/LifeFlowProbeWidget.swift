@@ -8,6 +8,10 @@ struct LifeFlowWidgetBundle: WidgetBundle {
         LifeFlowTodayWidget()
         if #available(iOS 17.0, *) {
             LifeFlowProbeWidget()
+            LifeFlowProbeConfigurationWidget()
+        }
+        if #available(iOS 18.0, *) {
+            LifeFlowProbeControl()
         }
     }
 }

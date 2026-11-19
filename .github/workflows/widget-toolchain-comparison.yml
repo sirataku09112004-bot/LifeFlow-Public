@@ -1,7 +1,7 @@
-name: Build the LifeFlow widget progress probe
+name: Build and test LifeFlow widget entry points
 on:
   push:
-    branches: [diagnostic/widget-progress-probe]
+    branches: [diagnostic/widget-entry-points]
 permissions:
   contents: read
 jobs:
@@ -16,7 +16,7 @@ jobs:
           persist-credentials: false
       - name: Install XcodeGen
         run: command -v xcodegen >/dev/null || brew install xcodegen
-      - name: Build and verify the progress reporting probe
+      - name: Build and verify the diagnostic IPA
         run: |
           set -euo pipefail
           xcodebuild -version
@@ -26,7 +26,30 @@ jobs:
       - name: Upload widget IPA for comparison
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: LifeFlow-widget-progress-probe
+          name: LifeFlow-widget-entry-points
           path: artifacts/LifeFlow-widget.ipa
           if-no-files-found: error
           retention-days: 7
+  test-configuration:
+    runs-on: xcode-27
+    timeout-minutes: 28
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install XcodeGen
+        run: command -v xcodegen >/dev/null || brew install xcodegen
+      - name: Test opening the system widget editor and loading the diagnostic options
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/prepare-icon.sh
+          xcodegen generate
+          device="$(xcrun simctl list devices available --json | python3 -c 'import json,sys; groups=json.load(sys.stdin)["devices"]; key=next(k for k in groups if k.endswith(".iOS-27-0")); phones=[d for d in groups[key] if d["name"].startswith("iPhone")]; print(next((d for d in phones if "Pro Max" in d["name"]), phones[0])["udid"])')"
+          xcrun simctl bootstatus "$device" -b
+          xcodebuild -project LifeFlow.xcodeproj -scheme LifeFlow -configuration Debug \
+            -destination "platform=iOS Simulator,id=$device" -parallel-testing-enabled NO \
+            -only-testing:LifeFlowUITests/HomeScreenWidgetTests/testEditableWidgetLoadsDynamicProbeOptions \
+            -derivedDataPath build/configuration-simulator test

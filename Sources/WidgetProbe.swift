@@ -4,7 +4,7 @@ import OSLog
 import WidgetKit
 
 enum FlowWidgetProbe: String, CaseIterable {
-    case standard, widget, app, legacy, foreground, toggle, link, progress
+    case standard, widget, app, legacy, foreground, toggle, link, progress, configuration
 
     static let kind = "LifeFlowWidgetProbe"
     static let linkURL = URL(string: "lifeflow://widget-probe")!
@@ -19,6 +19,7 @@ enum FlowWidgetProbe: String, CaseIterable {
         case .toggle: return "F 切替"
         case .link: return "G URL"
         case .progress: return "H 進捗付き"
+        case .configuration: return "I 設定の選択肢"
         }
     }
 }
@@ -51,7 +52,9 @@ enum FlowWidgetProbeLog {
             do {
                 let receipt = FlowWidgetProbeReceipt(date: date, process: process, shared: true, payloadOK: payloadOK)
                 try FlowWidgetSharedDataFile.writeData(JSONEncoder().encode(receipt), to: url, sharedGroup: true)
-                WidgetCenter.shared.reloadTimelines(ofKind: FlowWidgetProbe.kind)
+                if probe != .configuration {
+                    WidgetCenter.shared.reloadTimelines(ofKind: FlowWidgetProbe.kind)
+                }
                 return
             } catch {
                 logger.error("Could not write the shared receipt for \(probe.rawValue, privacy: .public)")
