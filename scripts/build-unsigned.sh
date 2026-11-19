@@ -38,7 +38,15 @@ assert host_action["fullyQualifiedTypeName"] == "LifeFlow." + intent
 assert widget_action["fullyQualifiedTypeName"] == "LifeFlowWidget." + intent
 assert host_action["identifier"] == widget_action["identifier"] == intent
 assert host_action["openAppWhenRun"] is False and widget_action["openAppWhenRun"] is False
-print("Verified host and widget metadata for background task completion")
+host_actions, widget_actions = actions(host), actions(widget)
+for suffix in ("Standard", "App", "Legacy", "Foreground", "Toggle"):
+    name = f"FlowProbe{suffix}Intent"
+    assert host_actions[name]["identifier"] == widget_actions[name]["identifier"] == name
+assert "FlowProbeWidgetIntent" in widget_actions
+assert "FlowProbeWidgetIntent" not in host_actions
+assert host_actions["FlowProbeForegroundIntent"]["openAppWhenRun"] is True
+assert widget_actions["FlowProbeForegroundIntent"]["openAppWhenRun"] is True
+print("Verified six diagnostic action definitions and the regular completion action")
 PY
 
 # AltStore discovers capabilities from the executable's signature. Ad-hoc

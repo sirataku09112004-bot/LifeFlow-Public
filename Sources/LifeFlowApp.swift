@@ -15,6 +15,10 @@ import SwiftUI
                 FlowGoalsView().tabItem { Label("年間目標", systemImage: "target") }.tag(1)
             }.environmentObject(store)
                 .onOpenURL { url in
+                    if url == FlowWidgetProbe.linkURL {
+                        FlowWidgetProbeLog.record(.link)
+                        return
+                    }
                     guard let route = FlowWidgetRoute(url) else { return }
                     tab = 0
                     if route.taskID != nil, route.occurrenceDay != nil {
@@ -61,6 +65,7 @@ import SwiftUI
     }
 }
 struct FlowHome: View {
+    @State private var showingWidgetProbe = false
     @EnvironmentObject var store: FlowStore
     @Environment(\.scenePhase) private var phase
     @State private var scheduleTask: FlowTask?
@@ -162,6 +167,7 @@ struct FlowHome: View {
                             )).disabled(!store.widgetEnabled)
                             Button("ウィジェットを更新") { store.refreshWidget(force: true) }
                             Button("最後のウィジェット操作") { store.error = store.widgetDiagnostics }
+                            Button("ウィジェット診断結果") { showingWidgetProbe = true }
                         }
                         Divider()
                         Button("JSONバックアップを書き出す") {
@@ -176,6 +182,7 @@ struct FlowHome: View {
                     }.disabled(!store.ready)
                 }
             }
+            .sheet(isPresented: $showingWidgetProbe) { FlowWidgetProbeResultsView() }
             .sheet(item: $scheduleTask) { task in
                 TaskScheduleSheet(task: task)
             }
