@@ -246,6 +246,13 @@ private struct TodayWidgetView: View {
     }
 }
 
+@main
+struct LifeFlowWidgetBundle: WidgetBundle {
+    var body: some Widget {
+        LifeFlowTodayWidget()
+    }
+}
+
 struct LifeFlowTodayWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: FlowWidgetContainer.kind, provider: TodayProvider()) { entry in

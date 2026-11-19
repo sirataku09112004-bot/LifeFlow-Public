@@ -1,4 +1,4 @@
-name: Build and test LifeFlow widget entry points
+name: Build and test LifeFlow widget
 on:
   push:
     branches: [diagnostic/widget-entry-points]
@@ -16,21 +16,21 @@ jobs:
           persist-credentials: false
       - name: Install XcodeGen
         run: command -v xcodegen >/dev/null || brew install xcodegen
-      - name: Build and verify the diagnostic IPA
+      - name: Build and verify the widget IPA
         run: |
           set -euo pipefail
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
           test "$(xcrun --sdk iphoneos --show-sdk-version)" = "26.2"
           bash scripts/build-unsigned.sh
-      - name: Upload widget IPA for comparison
+      - name: Upload widget IPA
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: LifeFlow-widget-entry-points
+          name: LifeFlow-widget
           path: artifacts/LifeFlow-widget.ipa
           if-no-files-found: error
           retention-days: 7
-  test-configuration:
+  test-widget:
     runs-on: xcode-27
     timeout-minutes: 28
     env:
@@ -41,7 +41,7 @@ jobs:
           persist-credentials: false
       - name: Install XcodeGen
         run: command -v xcodegen >/dev/null || brew install xcodegen
-      - name: Test the medium widget layout
+      - name: Test the medium layout and small widget completion
         shell: bash
         run: |
           set -euo pipefail
@@ -49,11 +49,8 @@ jobs:
           xcodegen generate
           device="$(xcrun simctl list devices available --json | python3 -c 'import json,sys; groups=json.load(sys.stdin)["devices"]; key=next(k for k in groups if k.endswith(".iOS-27-0")); phones=[d for d in groups[key] if d["name"].startswith("iPhone")]; print(next((d for d in phones if "Pro Max" in d["name"]), phones[0])["udid"])')"
           xcrun simctl bootstatus "$device" -b
-          status=0
           xcodebuild -project LifeFlow.xcodeproj -scheme LifeFlow -configuration Debug \
             -destination "platform=iOS Simulator,id=$device" -parallel-testing-enabled NO \
             -only-testing:LifeFlowUITests/HomeScreenWidgetTests/testMediumWidgetShowsTodayAndUpcomingSideBySide \
-            -derivedDataPath build/configuration-simulator test || status=$?
-          xcrun simctl spawn "$device" log show --last 15m --style compact \
-            --predicate 'category == "WidgetProbe" OR (process == "linkd" AND eventMessage CONTAINS[c] "local.private.lifeflow")' || true
-          exit "$status"
+            -only-testing:LifeFlowUITests/HomeScreenWidgetTests/testSmallWidgetCompletesToDoWithoutOpeningLifeFlow \
+            -derivedDataPath build/widget-simulator test

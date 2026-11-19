@@ -15,39 +15,6 @@ struct BackupDocument: FileDocument {
     @Published private(set) var ready = false
     @Published private(set) var widgetShowsTitles = UserDefaults.standard.bool(forKey: "widgetShowsTitles")
     @Published private(set) var widgetOpensForCompletion = UserDefaults.standard.bool(forKey: "widgetOpensForCompletion")
-    private var lastAppWidgetAction: FlowWidgetActionReport?
-    var lastWidgetAction: String? {
-        var latest = lastAppWidgetAction
-        if let url = FlowWidgetContainer.resultFile,
-           let bytes = try? FlowWidgetSharedDataFile.readData(from: url),
-           let report = try? JSONDecoder().decode(FlowWidgetActionReport.self, from: bytes),
-           latest.map({ $0.date < report.date }) ?? true {
-            latest = report
-        }
-        return latest.map { $0.date.formatted(date: .abbreviated, time: .standard) + "  " + $0.message }
-    }
-    var widgetDiagnostics: String {
-        let extensionURL = Bundle.main.builtInPlugInsURL?.appendingPathComponent("LifeFlowWidget.appex")
-        func actionStatus(_ name: String, in bundleURL: URL?) -> String {
-            let metadata = bundleURL?.appendingPathComponent("Metadata.appintents/extract.actionsdata")
-            let actions = metadata.flatMap { try? Data(contentsOf: $0) }.flatMap {
-                (try? JSONSerialization.jsonObject(with: $0) as? [String: Any])?["actions"] as? [String: Any]
-            }
-            return actions?[name] == nil ? "見つかりません" : "あり"
-        }
-        func details(_ name: String) -> String {
-            "アプリ \(actionStatus(name, in: Bundle.main.bundleURL)) ／ ウィジェット \(actionStatus(name, in: extensionURL))"
-        }
-        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "不明"
-        return [
-            "ビルド \(build)",
-            "達成の定義　\(details("CompleteWidgetTaskInAppIntent"))",
-            "Aの定義　\(details("FlowProbeStandardIntent"))",
-            "Hの定義　\(details("FlowProbeProgressIntent"))",
-            "共有データ領域 \(widgetEnabled ? "利用可" : "利用不可")",
-            lastWidgetAction ?? "ウィジェットから受け取った操作はまだありません。"
-        ].joined(separator: "\n")
-    }
     private var widgetSnapshot: FlowWidgetSnapshot?
     private var widgetDay: Date?
     var widgetEnabled: Bool { FlowWidgetContainer.file != nil }
@@ -82,6 +49,7 @@ struct BackupDocument: FileDocument {
         url = sharedURL ?? legacyURL
         usesSharedDataFile = sharedURL != nil
         #endif
+        removePreviousWidgetDiagnostics()
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             // Keep the old private file intact and copy it only once into the app group.
@@ -344,29 +312,34 @@ struct BackupDocument: FileDocument {
         WidgetCenter.shared.reloadTimelines(ofKind: FlowWidgetContainer.kind)
     }
 
+    private func removePreviousWidgetDiagnostics() {
+        let probes = ["standard", "widget", "app", "legacy", "foreground", "toggle", "link",
+                      "progress", "configuration", "configurationTimeline"]
+        let folder = FlowWidgetContainer.file?.deletingLastPathComponent()
+        for probe in probes {
+            UserDefaults.standard.removeObject(forKey: "widget-probe.\(probe)")
+            if let file = folder?.appendingPathComponent("widget-probe-\(probe).json") {
+                try? FileManager.default.removeItem(at: file)
+            }
+        }
+        if let file = folder?.appendingPathComponent("widget-action-result.json") {
+            try? FileManager.default.removeItem(at: file)
+        }
+    }
+
     @discardableResult
     func completeWidgetTask(_ id: UUID, occurrenceDay: Date, displayedDay: Date? = nil) -> Bool {
-        guard ready else {
-            recordWidgetAction("丸ボタンを受け取りましたが、データを読み込めませんでした")
-            return false
-        }
+        guard ready else { return false }
         synchronizeWidgetChanges()
         let now = Date()
         guard let completed = FlowWidgetTaskAction.complete(id, occurrenceDay: occurrenceDay,
                                                             displayedDay: displayedDay,
                                                             data: data, now: now, clock: clock) else {
             error = "ウィジェットの予定が更新されています。表示を更新してから、もう一度お試しください。"
-            recordWidgetAction("丸ボタンを受け取りましたが、現在の予定と一致しませんでした")
             WidgetCenter.shared.reloadTimelines(ofKind: FlowWidgetContainer.kind)
             return false
         }
-        let saved = commit(completed)
-        recordWidgetAction(saved ? "丸ボタンで達成を保存しました" : "丸ボタンを受け取りましたが、保存できませんでした")
-        return saved
-    }
-
-    func recordWidgetAction(_ message: String) {
-        lastAppWidgetAction = FlowWidgetActionReport(date: Date(), message: message)
+        return commit(completed)
     }
 
     func planToday(_ id: UUID, enabled: Bool) {

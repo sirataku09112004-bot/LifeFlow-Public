@@ -28,26 +28,21 @@ struct CompleteWidgetTaskInAppIntent: AppIntent {
         #else
         defer { WidgetCenter.shared.reloadTimelines(ofKind: FlowWidgetContainer.kind) }
         Self.logger.notice("Widget completion started in the host app")
-        record("ウィジェットから丸の操作を受け取りました")
         guard let id = UUID(uuidString: taskID),
               let occurrence = day(from: occurrenceStamp), let displayed = day(from: displayedStamp) else {
             Self.logger.error("Widget completion parameters were invalid")
-            record("丸の操作は届きましたが、対象のタスクを読み取れませんでした")
             return .result()
         }
         guard let url = FlowWidgetContainer.dataFile else {
             Self.logger.error("Widget completion could not locate the shared container")
-            record("共有データを開けませんでした")
             return .result()
         }
         do {
             let saved = try FlowWidgetSharedDataFile.completeTask(id, occurrenceDay: occurrence,
                 displayedDay: displayed, at: url, now: Date(), clock: FlowClock())
             Self.logger.notice("Widget completion saved: \(saved, privacy: .public)")
-            record(saved ? "アプリを開かずに達成を保存しました" : "現在の予定と一致しませんでした")
         } catch {
             Self.logger.error("Widget completion failed to read or write shared data")
-            record("達成を保存できませんでした")
         }
         return .result()
         #endif
@@ -58,14 +53,6 @@ struct CompleteWidgetTaskInAppIntent: AppIntent {
         guard let seconds = Int(stamp) else { return nil }
         let result = Date(timeIntervalSince1970: TimeInterval(seconds))
         return (Date.distantPast...Date.distantFuture).contains(result) ? result : nil
-    }
-
-    private func record(_ message: String) {
-        guard let url = FlowWidgetContainer.resultFile else { return }
-        try? FlowWidgetSharedDataFile.writeData(
-            JSONEncoder().encode(FlowWidgetActionReport(date: Date(), message: message)),
-            to: url, sharedGroup: true
-        )
     }
     #endif
 }

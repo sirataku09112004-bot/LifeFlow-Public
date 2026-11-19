@@ -7,8 +7,8 @@ settings:
   base:
     SWIFT_VERSION: '5.0'
     TARGETED_DEVICE_FAMILY: '1'
-    MARKETING_VERSION: '0.9.24'
-    CURRENT_PROJECT_VERSION: '33'
+    MARKETING_VERSION: '0.9.25'
+    CURRENT_PROJECT_VERSION: '34'
 targets:
   LifeFlow:
     type: application
@@ -49,7 +49,6 @@ targets:
         excludes: [Info.plist]
       - path: Sources/Core
       - path: Sources/WidgetTaskIntent.swift
-      - path: Sources/WidgetProbe.swift
     settings:
       base:
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) LIFEFLOW_WIDGET_EXTENSION"

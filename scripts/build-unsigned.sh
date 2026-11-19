@@ -38,25 +38,10 @@ assert host_action["fullyQualifiedTypeName"] == "LifeFlow." + intent
 assert widget_action["fullyQualifiedTypeName"] == "LifeFlowWidget." + intent
 assert host_action["identifier"] == widget_action["identifier"] == intent
 assert host_action["openAppWhenRun"] is False and widget_action["openAppWhenRun"] is False
-host_actions, widget_actions = actions(host), actions(widget)
-for suffix in ("Standard", "App", "Legacy", "Foreground", "Toggle", "Progress"):
-    name = f"FlowProbe{suffix}Intent"
-    assert host_actions[name]["identifier"] == widget_actions[name]["identifier"] == name
-assert "FlowProbeWidgetIntent" in widget_actions
-assert "FlowProbeWidgetIntent" not in host_actions
-assert host_actions["FlowProbeForegroundIntent"]["openAppWhenRun"] is True
-assert widget_actions["FlowProbeForegroundIntent"]["openAppWhenRun"] is True
-for bundle_actions in (host_actions, widget_actions):
-    progress_protocols = set(bundle_actions["FlowProbeProgressIntent"]["systemProtocols"])
-    legacy_protocols = set(bundle_actions["FlowProbeLegacyIntent"]["systemProtocols"])
-    assert legacy_protocols == {"com.apple.link.systemProtocol.ForegroundContinuable"}
-    assert progress_protocols == legacy_protocols | {"com.apple.link.systemProtocol.ProgressReporting"}
-for bundle_actions in (host_actions, widget_actions):
-    config = bundle_actions["FlowProbeConfigurationIntent"]
-    assert config["identifier"] == "FlowProbeConfigurationIntent"
-    choice = config["parameters"][0]
-    assert choice["name"] == "choice" and "entity" in choice["valueType"]
-print("Verified both entry points and the configuration entity in the IPA")
+for bundle in (host, widget):
+    assert set(actions(bundle)) == {intent}
+
+print("Verified the completion action in both the app and widget")
 PY
 
 # AltStore discovers capabilities from the executable's signature. Ad-hoc
