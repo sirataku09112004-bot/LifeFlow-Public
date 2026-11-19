@@ -1,0 +1,33 @@
+name: Compare LifeFlow widget with Xcode 26.2
+on:
+  push:
+    branches: [diagnostic/widget-xcode-26-compare]
+permissions:
+  contents: read
+jobs:
+  build-comparison:
+    runs-on: macos-26
+    timeout-minutes: 15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: 7d0ab56d7477598b49cafb716c1edcd243ffeb54
+          persist-credentials: false
+      - name: Install XcodeGen
+        run: command -v xcodegen >/dev/null || brew install xcodegen
+      - name: Verify the compiler and build the same diagnostic source
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          test "$(xcrun --sdk iphoneos --show-sdk-version)" = "26.2"
+          bash scripts/build-unsigned.sh
+      - name: Upload widget IPA for comparison
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: LifeFlow-widget-Xcode-26.2
+          path: artifacts/LifeFlow-widget.ipa
+          if-no-files-found: error
+          retention-days: 7
