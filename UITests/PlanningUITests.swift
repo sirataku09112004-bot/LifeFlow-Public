@@ -41,7 +41,7 @@ final class PlanningUITests: XCTestCase {
         let complete = app.buttons["habit-complete:C Habit"]
         XCTAssertTrue(complete.waitForExistence(timeout: 10))
         complete.tap()
-        let recorded = app.descendants(matching: .any).matching(identifier: "habit-today:C Habit").firstMatch
+        let recorded = app.staticTexts["habit-today:C Habit"]
         XCTAssertTrue(recorded.waitForExistence(timeout: 8))
         XCTAssertFalse(complete.exists)
     }
@@ -52,7 +52,10 @@ final class PlanningUITests: XCTestCase {
         app.buttons["ToDoを追加"].tap()
         let title = app.textFields.firstMatch
         XCTAssertTrue(title.waitForExistence(timeout: 8))
-        app.switches["期限なし"].tap()
+        let noDeadline = app.switches["期限なし"]
+        XCTAssertTrue(noDeadline.waitForExistence(timeout: 8))
+        noDeadline.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        XCTAssertEqual(noDeadline.value as? String, "1")
         title.tap()
         title.typeText("Undated 2027/04/29")
         app.buttons["保存"].tap()

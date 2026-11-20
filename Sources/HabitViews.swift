@@ -87,7 +87,9 @@ struct FlowHabitList: View {
                             .accessibilityLabel("今日の習慣の操作")
                     }
                 } else if let dayRecord {
-                    Label("今日：\(dayRecord.label)", systemImage: dayRecord == .completed ? "checkmark.circle.fill" : "circle.fill")
+                    Text("今日：\(dayRecord.label)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(FlowTheme.action)
                         .frame(minHeight: 44)
                         .accessibilityIdentifier("habit-today:" + task.title)
                     Spacer()
