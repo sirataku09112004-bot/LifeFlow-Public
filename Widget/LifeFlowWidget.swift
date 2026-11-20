@@ -11,7 +11,8 @@ private struct TodayEntry: TimelineEntry {
 
 private struct TodayProvider: TimelineProvider {
     func placeholder(in context: Context) -> TodayEntry {
-        TodayEntry(date: Date(), day: FlowWidgetDay(day: Date(), remaining: 3, percent: 40, titlesVisible: false, tasks: []))
+        TodayEntry(date: Date(), day: FlowWidgetDay(day: Date(), remaining: 3, percent: 40, titlesVisible: false,
+                                                   tasks: [], undated: .init(remaining: 3, tasks: [])))
     }
 
     func getSnapshot(in context: Context, completion: @escaping (TodayEntry) -> Void) {
@@ -67,6 +68,7 @@ private struct TodayWidgetView: View {
     @Environment(\.widgetFamily) private var family
     @Environment(\.widgetRenderingMode) private var renderingMode
     let entry: TodayEntry
+    var undatedOnly = false
     private let accent = Color(red: 0.04, green: 0.37, blue: 0.60)
     private var ink: Color { renderingMode == .fullColor ? Color(red: 0.09, green: 0.16, blue: 0.22) : .primary }
     private let canvas = Color(red: 0.92, green: 0.97, blue: 1.0)
@@ -84,7 +86,9 @@ private struct TodayWidgetView: View {
         GeometryReader { geometry in
             let headerHeight: CGFloat = family == .systemSmall ? 30 : 36
             let rowHeight = min(24, max(13, floor((geometry.size.height - headerHeight) / CGFloat(taskLimit))))
-            if family == .systemMedium {
+            if undatedOnly {
+                undatedColumn(rowHeight: rowHeight)
+            } else if family == .systemMedium {
                 HStack(alignment: .top, spacing: 4) {
                     todayColumn(rowHeight: rowHeight)
                     Rectangle()
@@ -102,6 +106,34 @@ private struct TodayWidgetView: View {
 
     private var taskLimit: Int {
         family == .systemSmall ? FlowWidgetDay.smallTaskLimit : FlowWidgetDay.mediumTaskLimit
+    }
+
+    private func undatedColumn(rowHeight: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text("期限なしのToDo")
+                .font(.caption.weight(.bold))
+            if let day = entry.day, let undated = day.undated {
+                Text("残り \(undated.remaining)件")
+                    .font(.system(size: 9))
+                if undated.remaining == 0 {
+                    Text("期限なしのタスクはありません")
+                        .font(.caption2)
+                } else if day.titlesVisible {
+                    ForEach(undated.tasks) { task in
+                        taskRow(task, displayedDay: day.day, height: rowHeight)
+                    }
+                } else {
+                    Text("LifeFlowの設定でToDo名を表示できます")
+                        .font(.caption2)
+                }
+            } else {
+                Text(entry.sharedStorageAvailable ? "LifeFlowを開いて更新" : "LifeFlowとデータを共有できません")
+                    .font(.caption)
+            }
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(ink)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func todayColumn(rowHeight: CGFloat) -> some View {
@@ -269,6 +301,19 @@ private struct TodayWidgetView: View {
 struct LifeFlowWidgetBundle: WidgetBundle {
     var body: some Widget {
         LifeFlowTodayWidget()
+        LifeFlowUndatedWidget()
+    }
+}
+
+struct LifeFlowUndatedWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: FlowWidgetContainer.undatedKind, provider: TodayProvider()) { entry in
+            TodayWidgetView(entry: entry, undatedOnly: true)
+        }
+        .configurationDisplayName("期限なしのToDo")
+        .description("期限を設定していない未完了のToDoを最大5件表示します。")
+        .supportedFamilies([.systemSmall])
+        .contentMarginsDisabled()
     }
 }
 

@@ -41,7 +41,7 @@ jobs:
           persist-credentials: false
       - name: Install XcodeGen
         run: command -v xcodegen >/dev/null || brew install xcodegen
-      - name: Test habit tracking, undated tasks, and widget completion
+      - name: Test the small undated widget
         shell: bash
         run: |
           set -euo pipefail
@@ -51,8 +51,5 @@ jobs:
           xcrun simctl bootstatus "$device" -b
           xcodebuild -project LifeFlow.xcodeproj -scheme LifeFlow -configuration Debug \
             -destination "platform=iOS Simulator,id=$device" -parallel-testing-enabled NO \
-            -only-testing:LifeFlowUITests/HomeScreenWidgetTests/testMediumWidgetShowsTodayAndUpcomingSideBySide \
-            -only-testing:LifeFlowUITests/HomeScreenWidgetTests/testSmallWidgetCompletesToDoWithoutOpeningLifeFlow \
-            -only-testing:LifeFlowUITests/PlanningUITests/testHabitTabRecordsTodaysDot \
-            -only-testing:LifeFlowUITests/PlanningUITests/testCreateUndatedTaskKeepsDateTextInTitle \
+            -only-testing:LifeFlowUITests/HomeScreenWidgetTests/testUndatedWidgetShowsOnlyUndatedTasksAndCompletesInBackground \
             -derivedDataPath build/widget-simulator test

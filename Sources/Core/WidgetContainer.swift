@@ -3,6 +3,7 @@ import Foundation
 enum FlowWidgetContainer {
     static let identifier = "group.local.private.lifeflow.widget"
     static let kind = "LifeFlowToday"
+    static let undatedKind = "LifeFlowUndated"
     static let fileName = "today-widget.json"
 
     static func groupIDs(_ signed: [String]) -> [String] {

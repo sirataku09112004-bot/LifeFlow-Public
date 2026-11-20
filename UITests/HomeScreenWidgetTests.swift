@@ -2,6 +2,67 @@ import XCTest
 
 final class HomeScreenWidgetTests: XCTestCase {
     @MainActor
+    func testUndatedWidgetShowsOnlyUndatedTasksAndCompletesInBackground() throws {
+        guard #available(iOS 27.0, *) else { throw XCTSkip("The Home Screen controls are for iOS 27.") }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        let undatedName = "No deadline \(UUID().uuidString.prefix(6))"
+        let datedName = "Dated sample \(UUID().uuidString.prefix(6))"
+        app.launch()
+
+        tap(app.buttons["ToDoを追加"])
+        let title = app.textFields.firstMatch
+        tap(title)
+        title.typeText(datedName)
+        tap(app.buttons["保存"])
+
+        tap(app.buttons["ToDoを追加"])
+        let noDeadline = app.switches["期限なし"]
+        XCTAssertTrue(noDeadline.waitForExistence(timeout: 8))
+        noDeadline.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        XCTAssertEqual(noDeadline.value as? String, "1")
+        tap(title)
+        title.typeText(undatedName)
+        tap(app.buttons["保存"])
+        tap(app.buttons["設定"])
+        tap(app.buttons["ウィジェット設定"])
+        tap(app.buttons["ウィジェットにToDo名を表示"])
+
+        XCUIDevice.shared.press(.home)
+        XCUIDevice.shared.press(.home)
+        let home = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        home.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8)).press(forDuration: 2)
+        tap(home.buttons["Edit"])
+        tap(home.buttons["Add Widget"])
+        let search = home.searchFields.firstMatch
+        tap(search)
+        search.typeText("LifeFlow")
+        tap(home.cells["LifeFlow"].firstMatch)
+        let preview = home.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND value == %@",
+                                                        "期限なしのToDo", "Widget, Small"))
+        for _ in 0..<3 where !preview.allElementsBoundByIndex.contains(where: \.isHittable) {
+            let start = home.coordinate(withNormalizedOffset: CGVector(dx: 0.83, dy: 0.51))
+            let end = home.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.51))
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        XCTAssertTrue(preview.allElementsBoundByIndex.contains(where: \.isHittable), home.debugDescription)
+        tap(home.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Add Widget")).firstMatch)
+        tap(home.buttons["Done"])
+
+        let tile = home.icons.matching(NSPredicate(format: "label == %@ AND value == %@", "LifeFlow", "Widget")).firstMatch
+        XCTAssertTrue(tile.staticTexts[undatedName].waitForExistence(timeout: 25))
+        XCTAssertLessThan(tile.frame.width, tile.frame.height * 1.5)
+        XCTAssertFalse(tile.staticTexts[datedName].exists)
+        tap(tile.descendants(matching: .any).matching(identifier: "widget-complete-task").firstMatch)
+        XCTAssertTrue(tile.staticTexts["期限なしのタスクはありません"].waitForExistence(timeout: 25))
+        XCTAssertEqual(home.state, .runningForeground)
+        XCTAssertNotEqual(app.state, .runningForeground)
+        app.activate()
+        XCTAssertTrue(app.buttons["undo:\(undatedName)"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["complete:\(datedName)"].exists)
+    }
+
+    @MainActor
     func testMediumWidgetShowsTodayAndUpcomingSideBySide() throws {
         guard #available(iOS 27.0, *) else { throw XCTSkip("The Home Screen controls are for iOS 27.") }
         continueAfterFailure = false

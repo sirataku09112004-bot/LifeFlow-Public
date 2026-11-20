@@ -26,7 +26,7 @@ struct CompleteWidgetTaskInAppIntent: AppIntent {
         Self.logger.error("Widget completion did not reach the host app")
         return .result()
         #else
-        defer { WidgetCenter.shared.reloadTimelines(ofKind: FlowWidgetContainer.kind) }
+        defer { WidgetCenter.shared.reloadAllTimelines() }
         Self.logger.notice("Widget completion started in the host app")
         guard let id = UUID(uuidString: taskID),
               let occurrence = day(from: occurrenceStamp), let displayed = day(from: displayedStamp) else {

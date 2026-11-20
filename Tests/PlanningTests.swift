@@ -139,7 +139,10 @@ final class PlanningTests: XCTestCase {
         }
         XCTAssertTrue(try snapshot(data).tasks.isEmpty)
         XCTAssertEqual(try snapshot(data).upcomingTasks, [])
-        XCTAssertNil(FlowWidgetTaskAction.complete(task.id, occurrenceDay: anchor, data: data, now: now, clock: clock))
+        XCTAssertEqual(try snapshot(data).undated?.tasks.map(\.id), [task.id])
+        let completedFromUndated = try XCTUnwrap(FlowWidgetTaskAction.complete(task.id, occurrenceDay: anchor,
+                                                                               data: data, now: now, clock: clock))
+        XCTAssertEqual(try snapshot(completedFromUndated).undated?.remaining, 0)
         XCTAssertTrue(data.setPlannedToday(task.id, enabled: true, now: now, clock: clock))
         XCTAssertEqual(try snapshot(data).tasks.map(\.id), [task.id])
         XCTAssertTrue(data.resolve(task.id, outcome: .failed, now: now, clock: clock))
@@ -153,6 +156,19 @@ final class PlanningTests: XCTestCase {
         XCTAssertEqual(completed.tasks, data.tasks)
         XCTAssertTrue(completed.changeDeadline(task.id, to: clock.today(now), clock: clock))
         XCTAssertEqual(completed.tasks.first?.hasDeadline, true)
+    }
+
+    func testUndatedWidgetShowsOnlyFiveUndatedTitlesAndHidesPrivateNames() throws {
+        let now = date("2026-11-16T20:00:00")
+        let today = clock.today(now)
+        let noDeadline = (1...6).map { FlowTask(title: "Undated \($0)", day: today, noDeadline: true) }
+        let data = FlowData(tasks: noDeadline + [FlowTask(title: "Due today", day: today)])
+        let snapshot = FlowWidgetSnapshot(data: data, now: now, clock: clock, showTitles: true)
+        XCTAssertEqual(snapshot.days.first?.undated?.remaining, 6)
+        XCTAssertEqual(snapshot.days.first?.undated?.tasks.map(\.title), Array(noDeadline.prefix(5)).map(\.title))
+        let hidden = FlowWidgetSnapshot(data: data, now: now, clock: clock, showTitles: false)
+        XCTAssertEqual(hidden.days.first?.undated?.remaining, 6)
+        XCTAssertEqual(hidden.days.first?.undated?.tasks, [])
     }
 
     func testWidgetRoutingAndAltStoreGroupNames() {

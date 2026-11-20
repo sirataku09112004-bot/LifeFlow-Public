@@ -7,10 +7,8 @@ enum FlowWidgetTaskAction {
         if let displayedDay, displayedDay != clock.today(now) { return nil }
         var updated = data
         guard updated.rollover(now: now, clock: clock, maxCarries: 10_000) else { return nil }
-        let today = clock.today(now)
         guard let task = updated.tasks.first(where: {
-            $0.id == taskID && clock.day($0.day) == clock.day(occurrenceDay) &&
-                ($0.hasDeadline || $0.isPlannedToday(today, clock: clock))
+            $0.id == taskID && clock.day($0.day) == clock.day(occurrenceDay)
         }) else { return nil }
         switch updated.resolveDisplayedTask(task, outcome: .completed, now: now, clock: clock,
                                             maxCarries: 10_000) {

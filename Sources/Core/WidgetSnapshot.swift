@@ -18,21 +18,28 @@ struct FlowWidgetDay: Codable, Equatable {
         }
     }
 
+    struct Undated: Codable, Equatable {
+        let remaining: Int
+        let tasks: [Task]
+    }
+
     let day: Date
     let remaining: Int
     let percent: Int
     let titlesVisible: Bool
     let tasks: [Task]
     let upcomingTasks: [Task]?
+    let undated: Undated?
 
     init(day: Date, remaining: Int, percent: Int, titlesVisible: Bool, tasks: [Task],
-         upcomingTasks: [Task]? = nil) {
+         upcomingTasks: [Task]? = nil, undated: Undated? = nil) {
         self.day = day
         self.remaining = remaining
         self.percent = percent
         self.titlesVisible = titlesVisible
         self.tasks = tasks
         self.upcomingTasks = upcomingTasks
+        self.undated = undated
     }
 }
 
@@ -57,6 +64,12 @@ struct FlowWidgetSnapshot: Codable, Equatable {
             let list = FlowTaskList(tasks: projected.tasks, query: "", now: date, clock: clock,
                                     todayOrder: projected.todayOrder ?? [])
             let pending = list.today.filter { !doneIDs.contains($0.id) }
+            let undatedTasks = list.all.filter { !$0.hasDeadline }
+            let undated = FlowWidgetDay.Undated(
+                remaining: undatedTasks.count,
+                tasks: showTitles ? undatedTasks.prefix(FlowWidgetDay.smallTaskLimit).map {
+                    FlowWidgetDay.Task(id: $0.id, title: $0.title, occurrenceDay: $0.day)
+                } : [])
             let upcoming = showTitles ? Array(list.all.lazy
                 .filter { $0.hasDeadline && !$0.belongsToToday(day, clock: clock) }
                 .prefix(FlowWidgetDay.mediumTaskLimit)
@@ -71,7 +84,7 @@ struct FlowWidgetSnapshot: Codable, Equatable {
                                          tasks: showTitles ? pending.prefix(FlowWidgetDay.mediumTaskLimit).map {
                                              FlowWidgetDay.Task(id: $0.id, title: $0.title, occurrenceDay: $0.day)
                                          } : [],
-                                         upcomingTasks: upcoming))
+                                         upcomingTasks: upcoming, undated: undated))
         }
         days = entries
     }

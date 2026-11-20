@@ -309,7 +309,7 @@ struct BackupDocument: FileDocument {
             widgetSnapshot = nil
             if force { self.error = "ウィジェットの表示を更新できませんでした。" }
         }
-        WidgetCenter.shared.reloadTimelines(ofKind: FlowWidgetContainer.kind)
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     private func removePreviousWidgetDiagnostics() {
@@ -336,7 +336,7 @@ struct BackupDocument: FileDocument {
                                                             displayedDay: displayedDay,
                                                             data: data, now: now, clock: clock) else {
             error = "ウィジェットの予定が更新されています。表示を更新してから、もう一度お試しください。"
-            WidgetCenter.shared.reloadTimelines(ofKind: FlowWidgetContainer.kind)
+            WidgetCenter.shared.reloadAllTimelines()
             return false
         }
         return commit(completed)
