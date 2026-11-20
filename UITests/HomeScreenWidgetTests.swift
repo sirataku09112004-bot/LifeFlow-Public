@@ -6,7 +6,8 @@ final class HomeScreenWidgetTests: XCTestCase {
         guard #available(iOS 27.0, *) else { throw XCTSkip("The Home Screen controls are for iOS 27.") }
         continueAfterFailure = false
         let app = XCUIApplication()
-        let undatedName = "No deadline \(UUID().uuidString.prefix(6))"
+        let prefix = "Task \(UUID().uuidString.prefix(6))"
+        let undatedNames = (1...8).map { "\(prefix) \($0)" }
         let datedName = "Dated sample \(UUID().uuidString.prefix(6))"
         app.launch()
 
@@ -16,14 +17,16 @@ final class HomeScreenWidgetTests: XCTestCase {
         title.typeText(datedName)
         tap(app.buttons["保存"])
 
-        tap(app.buttons["ToDoを追加"])
-        let noDeadline = app.switches["期限なし"]
-        XCTAssertTrue(noDeadline.waitForExistence(timeout: 8))
-        noDeadline.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
-        XCTAssertEqual(noDeadline.value as? String, "1")
-        tap(title)
-        title.typeText(undatedName)
-        tap(app.buttons["保存"])
+        for name in undatedNames {
+            tap(app.buttons["ToDoを追加"])
+            let noDeadline = app.switches["期限なし"]
+            XCTAssertTrue(noDeadline.waitForExistence(timeout: 8))
+            noDeadline.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+            XCTAssertEqual(noDeadline.value as? String, "1")
+            tap(title)
+            title.typeText(name)
+            tap(app.buttons["保存"])
+        }
         tap(app.buttons["設定"])
         tap(app.buttons["ウィジェット設定"])
         tap(app.buttons["ウィジェットにToDo名を表示"])
@@ -39,7 +42,7 @@ final class HomeScreenWidgetTests: XCTestCase {
         search.typeText("LifeFlow")
         tap(home.cells["LifeFlow"].firstMatch)
         let preview = home.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND value == %@",
-                                                        "期限なしのToDo", "Widget, Small"))
+                                                        "やることリスト", "Widget, Small"))
         for _ in 0..<3 where !preview.allElementsBoundByIndex.contains(where: \.isHittable) {
             let start = home.coordinate(withNormalizedOffset: CGVector(dx: 0.83, dy: 0.51))
             let end = home.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.51))
@@ -50,15 +53,24 @@ final class HomeScreenWidgetTests: XCTestCase {
         tap(home.buttons["Done"])
 
         let tile = home.icons.matching(NSPredicate(format: "label == %@ AND value == %@", "LifeFlow", "Widget")).firstMatch
-        XCTAssertTrue(tile.staticTexts[undatedName].waitForExistence(timeout: 25))
+        XCTAssertTrue(tile.staticTexts["やることリスト"].waitForExistence(timeout: 25))
         XCTAssertLessThan(tile.frame.width, tile.frame.height * 1.5)
+        for name in undatedNames.prefix(7) {
+            let row = tile.staticTexts[name]
+            XCTAssertTrue(row.waitForExistence(timeout: 25))
+            XCTAssertGreaterThanOrEqual(row.frame.minY, tile.frame.minY)
+            XCTAssertLessThanOrEqual(row.frame.maxY, tile.frame.maxY)
+        }
+        XCTAssertFalse(tile.staticTexts[undatedNames[7]].exists)
         XCTAssertFalse(tile.staticTexts[datedName].exists)
+        XCTAssertFalse(tile.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "残り")).firstMatch.exists)
         tap(tile.descendants(matching: .any).matching(identifier: "widget-complete-task").firstMatch)
-        XCTAssertTrue(tile.staticTexts["期限なしのタスクはありません"].waitForExistence(timeout: 25))
+        XCTAssertTrue(tile.staticTexts[undatedNames[7]].waitForExistence(timeout: 25))
+        XCTAssertFalse(tile.staticTexts[undatedNames[0]].exists)
         XCTAssertEqual(home.state, .runningForeground)
         XCTAssertNotEqual(app.state, .runningForeground)
         app.activate()
-        XCTAssertTrue(app.buttons["undo:\(undatedName)"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["undo:\(undatedNames[0])"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.buttons["complete:\(datedName)"].exists)
     }
 

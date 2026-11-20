@@ -84,7 +84,7 @@ private struct TodayWidgetView: View {
 
     private var content: some View {
         GeometryReader { geometry in
-            let headerHeight: CGFloat = family == .systemSmall ? 30 : 36
+            let headerHeight: CGFloat = undatedOnly ? 24 : (family == .systemSmall ? 30 : 36)
             let rowHeight = min(24, max(13, floor((geometry.size.height - headerHeight) / CGFloat(taskLimit))))
             if undatedOnly {
                 undatedColumn(rowHeight: rowHeight)
@@ -105,16 +105,15 @@ private struct TodayWidgetView: View {
     }
 
     private var taskLimit: Int {
-        family == .systemSmall ? FlowWidgetDay.smallTaskLimit : FlowWidgetDay.mediumTaskLimit
+        if undatedOnly { return FlowWidgetDay.undatedTaskLimit }
+        return family == .systemSmall ? FlowWidgetDay.smallTaskLimit : FlowWidgetDay.mediumTaskLimit
     }
 
     private func undatedColumn(rowHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text("期限なしのToDo")
+            Text("やることリスト")
                 .font(.caption.weight(.bold))
             if let day = entry.day, let undated = day.undated {
-                Text("残り \(undated.remaining)件")
-                    .font(.system(size: 9))
                 if undated.remaining == 0 {
                     Text("期限なしのタスクはありません")
                         .font(.caption2)
@@ -310,8 +309,8 @@ struct LifeFlowUndatedWidget: Widget {
         StaticConfiguration(kind: FlowWidgetContainer.undatedKind, provider: TodayProvider()) { entry in
             TodayWidgetView(entry: entry, undatedOnly: true)
         }
-        .configurationDisplayName("期限なしのToDo")
-        .description("期限を設定していない未完了のToDoを最大5件表示します。")
+        .configurationDisplayName("やることリスト")
+        .description("期限を設定していない未完了のToDoを最大7件表示します。")
         .supportedFamilies([.systemSmall])
         .contentMarginsDisabled()
     }

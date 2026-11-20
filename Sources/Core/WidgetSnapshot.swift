@@ -3,6 +3,7 @@ import Foundation
 struct FlowWidgetDay: Codable, Equatable {
     static let smallTaskLimit = 5
     static let mediumTaskLimit = 6
+    static let undatedTaskLimit = 7
 
     struct Task: Codable, Equatable, Identifiable {
         let id: UUID
@@ -67,7 +68,7 @@ struct FlowWidgetSnapshot: Codable, Equatable {
             let undatedTasks = list.all.filter { !$0.hasDeadline }
             let undated = FlowWidgetDay.Undated(
                 remaining: undatedTasks.count,
-                tasks: showTitles ? undatedTasks.prefix(FlowWidgetDay.smallTaskLimit).map {
+                tasks: showTitles ? undatedTasks.prefix(FlowWidgetDay.undatedTaskLimit).map {
                     FlowWidgetDay.Task(id: $0.id, title: $0.title, occurrenceDay: $0.day)
                 } : [])
             let upcoming = showTitles ? Array(list.all.lazy

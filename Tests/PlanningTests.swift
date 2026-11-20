@@ -158,16 +158,16 @@ final class PlanningTests: XCTestCase {
         XCTAssertEqual(completed.tasks.first?.hasDeadline, true)
     }
 
-    func testUndatedWidgetShowsOnlyFiveUndatedTitlesAndHidesPrivateNames() throws {
+    func testUndatedWidgetShowsOnlySevenUndatedTitlesAndHidesPrivateNames() throws {
         let now = date("2026-11-16T20:00:00")
         let today = clock.today(now)
-        let noDeadline = (1...6).map { FlowTask(title: "Undated \($0)", day: today, noDeadline: true) }
+        let noDeadline = (1...8).map { FlowTask(title: "Undated \($0)", day: today, noDeadline: true) }
         let data = FlowData(tasks: noDeadline + [FlowTask(title: "Due today", day: today)])
         let snapshot = FlowWidgetSnapshot(data: data, now: now, clock: clock, showTitles: true)
-        XCTAssertEqual(snapshot.days.first?.undated?.remaining, 6)
-        XCTAssertEqual(snapshot.days.first?.undated?.tasks.map(\.title), Array(noDeadline.prefix(5)).map(\.title))
+        XCTAssertEqual(snapshot.days.first?.undated?.remaining, 8)
+        XCTAssertEqual(snapshot.days.first?.undated?.tasks.map(\.title), Array(noDeadline.prefix(7)).map(\.title))
         let hidden = FlowWidgetSnapshot(data: data, now: now, clock: clock, showTitles: false)
-        XCTAssertEqual(hidden.days.first?.undated?.remaining, 6)
+        XCTAssertEqual(hidden.days.first?.undated?.remaining, 8)
         XCTAssertEqual(hidden.days.first?.undated?.tasks, [])
     }
 
