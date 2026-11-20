@@ -69,9 +69,11 @@ private struct TodayWidgetView: View {
     @Environment(\.widgetRenderingMode) private var renderingMode
     let entry: TodayEntry
     var undatedOnly = false
-    private let accent = Color(red: 0.04, green: 0.37, blue: 0.60)
-    private var ink: Color { renderingMode == .fullColor ? Color(red: 0.09, green: 0.16, blue: 0.22) : .primary }
-    private let canvas = Color(red: 0.92, green: 0.97, blue: 1.0)
+    private var ink: Color {
+        renderingMode == .fullColor ? Color(.sRGB, red: 208 / 255, green: 226 / 255, blue: 190 / 255) : .primary
+    }
+    private let canvas = Color.black
+    private var rowBorder: Color { renderingMode == .fullColor ? ink.opacity(0.18) : .clear }
 
     var body: some View {
         if #available(iOS 17.0, *) {
@@ -154,7 +156,7 @@ private struct TodayWidgetView: View {
                     .foregroundStyle(ink)
                 if family != .systemSmall {
                     ProgressView(value: Double(day.percent), total: 100)
-                        .tint(accent)
+                        .tint(ink)
                         .frame(height: 4)
                         .accessibilityLabel("今日の達成率 \(day.percent)%")
                 }
@@ -229,8 +231,7 @@ private struct TodayWidgetView: View {
             }
         }
         .frame(height: height)
-        .background(renderingMode == .fullColor ? Color.white : Color.clear,
-                    in: RoundedRectangle(cornerRadius: 6))
+        .background { RoundedRectangle(cornerRadius: 6).strokeBorder(rowBorder) }
     }
 
     private func taskRow(_ task: FlowWidgetDay.Task, displayedDay: Date, height: CGFloat) -> some View {
@@ -245,8 +246,7 @@ private struct TodayWidgetView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: height)
         .padding(.trailing, 4)
-        .background(renderingMode == .fullColor ? Color.white : Color.clear,
-                    in: RoundedRectangle(cornerRadius: 6))
+        .background { RoundedRectangle(cornerRadius: 6).strokeBorder(rowBorder) }
     }
 
     private func taskTitle(_ title: String) -> some View {
@@ -296,7 +296,7 @@ private struct TodayWidgetView: View {
     private func circle(_ height: CGFloat, width: CGFloat) -> some View {
         Image(systemName: "circle")
             .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(renderingMode == .fullColor ? accent : ink)
+            .foregroundStyle(ink)
             .frame(width: width, height: height)
             .contentShape(Rectangle())
     }
