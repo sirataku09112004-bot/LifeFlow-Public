@@ -12,7 +12,8 @@ import SwiftUI
         WindowGroup {
             TabView(selection: $tab) {
                 FlowHome().tabItem { Label("ToDo", systemImage: "checklist") }.tag(0)
-                FlowCalendarView().tabItem { Label("カレンダー", systemImage: "calendar") }.tag(2)
+                NavigationStack { FlowHabitList() }
+                    .tabItem { Label("習慣", systemImage: "circle.grid.2x2") }.tag(2)
                 FlowGoalsView().tabItem { Label("年間目標", systemImage: "target") }.tag(1)
             }.environmentObject(store)
                 .onOpenURL { url in
@@ -119,10 +120,17 @@ struct FlowHome: View {
                     ForEach(completed) { completedRow($0) }
                 }
                 let upcoming = favoritesOnly ? taskList.favorites : taskList.all
-                let later = upcoming.filter { !$0.belongsToToday(store.clock.today(now), clock: store.clock) }
+                let outsideToday = upcoming.filter { !$0.belongsToToday(store.clock.today(now), clock: store.clock) }
+                let later = outsideToday.filter(\.hasDeadline)
                 if !later.isEmpty {
                     Section("今後の予定") {
                         ForEach(later) { taskRow($0) }
+                    }
+                }
+                let undated = outsideToday.filter { !$0.hasDeadline }
+                if !undated.isEmpty {
+                    Section("期限なし") {
+                        ForEach(undated) { taskRow($0) }
                     }
                 }
             }
@@ -333,7 +341,8 @@ struct FlowHome: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("達成済み").font(.caption.weight(.semibold)).foregroundStyle(FlowTheme.action)
-                Text("期限 \(store.clock.label(event.deadline))").font(.caption).foregroundStyle(.secondary)
+                Text(event.hasDeadline ? "期限 \(store.clock.label(event.deadline))" : "期限なし")
+                    .font(.caption).foregroundStyle(.secondary)
                 if !reversible {
                     Text(event.completionUndo == nil ? "この記録は取り消せません（復元情報なし）" : "この記録は取り消せません")
                         .font(.caption).foregroundStyle(.secondary)
@@ -371,8 +380,12 @@ struct FlowHome: View {
                 Button { editing = task } label: {
                     VStack(alignment: .leading) {
                         Text(task.title).font(.headline).fixedSize(horizontal: false, vertical: true).foregroundStyle(task.originDay == nil ? FlowTheme.ink : Color.red)
-                        Text(store.clock.label(task.deadline)).font(.caption).foregroundStyle(.secondary)
-                        deadlineStatus(task)
+                        if task.hasDeadline {
+                            Text(store.clock.label(task.deadline)).font(.caption).foregroundStyle(.secondary)
+                            deadlineStatus(task)
+                        } else {
+                            Text("期限なし").font(.caption).foregroundStyle(.secondary)
+                        }
                         if task.isPlannedToday(store.clock.today(now), clock: store.clock) {
                             Label("今日やる", systemImage: "calendar").font(.caption)
                                 .foregroundStyle(FlowTheme.action)
@@ -447,14 +460,15 @@ struct TaskEditor: View {
     @State private var saveError: String?
     @State private var manuallySetDate = false
     @FocusState private var titleFocused: Bool
+    private var usesAutomaticDates: Bool { automaticDates && task.hasDeadline }
     var recognized: FlowInputResult? {
-        hasEditedInput && automaticDates ? store.clock.parseInput(title: task.title, note: task.note, now: Date()) : nil
+        hasEditedInput && usesAutomaticDates ? store.clock.parseInput(title: task.title, note: task.note, now: Date()) : nil
     }
     var savedTitle: String { (recognized?.title ?? task.title).trimmingCharacters(in: .whitespacesAndNewlines) }
     var savedNote: String { (recognized?.note ?? task.note).trimmingCharacters(in: .whitespacesAndNewlines) }
     func inferDueDate() {
         hasEditedInput = true
-        let parsed = automaticDates ? store.clock.parseInput(title: task.title, note: task.note, now: Date()) : nil
+        let parsed = usesAutomaticDates ? store.clock.parseInput(title: task.title, note: task.note, now: Date()) : nil
         let key = parsed.map { "\($0.fromNote)-\($0.expression)-\($0.date.timeIntervalSince1970)" }
         if !manuallySetDate, key != lastAutoKey, let parsed = parsed {
             task.day = parsed.date
@@ -490,6 +504,15 @@ struct TaskEditor: View {
                         Label(task.category ?? "カテゴリを選択", systemImage: "folder")
                             .multilineTextAlignment(.leading)
                     }
+                    if task.habitGoal == nil && task.repeatRule == nil {
+                        Toggle("期限なし", isOn: Binding(get: { !task.hasDeadline }, set: { enabled in
+                            if !enabled && store.data.tasks.first(where: { $0.id == task.id })?.hasDeadline == false {
+                                task.day = store.clock.today()
+                                task.originDay = nil
+                            }
+                            task.noDeadline = enabled ? true : nil
+                        }))
+                    }
                     if let parsed = recognized, !manuallySetDate {
                         Label(store.clock.label(parsed.date), systemImage: "calendar")
                             .font(.caption).foregroundStyle(.secondary)
@@ -502,6 +525,13 @@ struct TaskEditor: View {
             .onChange(of: task.title) { _ in inferDueDate() }
             .onChange(of: task.note) { _ in inferDueDate() }
             .onChange(of: automaticDates) { _ in inferDueDate() }
+            .onChange(of: task.habitGoal) { goal in
+                if goal != nil && task.noDeadline == true {
+                    task.noDeadline = nil
+                    task.day = store.clock.today()
+                    task.originDay = nil
+                }
+            }
             .onAppear { if isNew { titleFocused = true } }
             .alert("新しいカテゴリ", isPresented: $addingCategory) {
                 TextField("名前（40文字以内）", text: $categoryDraft)
@@ -525,21 +555,25 @@ struct TaskEditor: View {
     private var detailFields: some View {
         Group {
             TextField("メモ", text: $task.note, axis: .vertical)
-            Toggle("文章の日付を使う", isOn: $automaticDates)
-            DatePicker(task.habitGoal == nil ? "期限" : "予定日",
-                       selection: Binding(get: { task.deadline }, set: {
-                task.day = $0
-                task.originDay = nil
-                manuallySetDate = true
-            }), displayedComponents: .date)
+            if task.hasDeadline {
+                Toggle("文章の日付を使う", isOn: $automaticDates)
+                DatePicker(task.habitGoal == nil ? "期限" : "予定日",
+                           selection: Binding(get: { task.deadline }, set: {
+                    task.day = $0
+                    task.originDay = nil
+                    manuallySetDate = true
+                }), displayedComponents: .date)
+            }
             Picker("優先度", selection: Binding(get: { task.priority ?? .normal }, set: { task.priority = $0 == .normal ? nil : $0 })) {
                 ForEach(FlowPriority.allCases) { Text($0.label).tag($0) }
             }
             Toggle("お気に入り", isOn: $task.favorite)
-            Toggle("このToDoを通知する", isOn: Binding(get: { task.muteReminder != true }, set: { task.muteReminder = $0 ? nil : true }))
+            if task.hasDeadline {
+                Toggle("このToDoを通知する", isOn: Binding(get: { task.muteReminder != true }, set: { task.muteReminder = $0 ? nil : true }))
+            }
             if task.habitGoal != nil {
                 Stepper("週の目標：\(task.habitGoal ?? 3)回", value: Binding(get: { task.habitGoal ?? 3 }, set: { task.habitGoal = $0 }), in: 1...7)
-            } else {
+            } else if task.hasDeadline {
                 Picker("繰り返し", selection: $task.repeatRule) {
                     Text("なし").tag(Optional<FlowRepeat>.none)
                     ForEach(FlowRepeat.allCases) { Text($0.label).tag(Optional($0)) }
@@ -552,7 +586,7 @@ struct TaskEditor: View {
         guard canSave else { return }
         var candidate = task
         let previous = store.data.tasks.first { $0.id == candidate.id }
-        if automaticDates, previous?.title != candidate.title || previous?.note != candidate.note,
+        if usesAutomaticDates, previous?.title != candidate.title || previous?.note != candidate.note,
            let parsed = store.clock.parseInput(title: candidate.title, note: candidate.note, now: Date()) {
             let title = parsed.title.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !title.isEmpty else { return }
@@ -573,6 +607,7 @@ struct TaskEditor: View {
             return clean
         }
         candidate.day = store.clock.day(candidate.day)
+        if !candidate.hasDeadline { candidate.originDay = nil }
         if previous?.repeatRule != candidate.repeatRule || previous?.deadline != candidate.deadline {
             candidate.repeatAnchorDay = candidate.repeatRule.map { _ in store.clock.calendar.component(.day, from: candidate.day) }
             candidate.repeatAnchorWeekday = candidate.repeatRule.map { _ in store.clock.calendar.component(.weekday, from: candidate.day) }

@@ -26,8 +26,10 @@ struct FlowTask: Identifiable, Codable, Equatable {
     var habitGoal: Int? = nil
     var muteReminder: Bool? = nil
     var plannedDay: Date? = nil
+    var noDeadline: Bool? = nil
 
     var deadline: Date { habitGoal == nil ? originDay ?? day : day }
+    var hasDeadline: Bool { noDeadline != true || habitGoal != nil || repeatRule != nil }
 }
 struct FlowCompletionUndo: Codable {
     let original: FlowTask
@@ -47,8 +49,10 @@ struct FlowEvent: Identifiable, Codable {
     var favorite: Bool? = nil
     var completionUndo: FlowCompletionUndo? = nil
     var originalDeadline: Date? = nil
+    var noDeadline: Bool? = nil
 
     var deadline: Date { originalDeadline ?? completionUndo?.original.deadline ?? day }
+    var hasDeadline: Bool { noDeadline != true }
 }
 struct FlowData: Codable {
     static let currentSchema = 5
@@ -233,13 +237,14 @@ enum FlowSearch {
     }
 }
 enum FlowResolutionBlock: Equatable {
-    case future, habitRecorded, alreadyCompleted
+    case future, habitRecorded, alreadyCompleted, alreadyFailed
 
     var message: String {
         switch self {
         case .future: return "予定日になると記録できます"
         case .habitRecorded: return "今日の習慣は記録済みです"
         case .alreadyCompleted: return "このToDoはすでに達成済みです"
+        case .alreadyFailed: return "今日の失敗は記録済みです"
         }
     }
 }
@@ -254,22 +259,29 @@ extension FlowData {
                                  outcome: outcome, category: FlowCategories.normalized(task.category),
                                  subtasks: task.subtasks,
                                  favorite: (outcome == .completed || outcome == .failed) && task.favorite ? true : nil,
-                                 originalDeadline: task.deadline == task.day ? nil : task.deadline))
+                                 originalDeadline: task.hasDeadline && task.deadline != task.day ? task.deadline : nil,
+                                 noDeadline: task.hasDeadline ? nil : true))
     }
     func resolutionBlock(for task: FlowTask, outcome: Outcome = .completed,
                          now: Date, clock: FlowClock) -> FlowResolutionBlock? {
         let today = clock.today(now)
         let targetDeadline = clock.day(task.deadline)
-        if (task.habitGoal != nil || outcome == .failed) && clock.day(task.day) > today {
+        if task.hasDeadline && (task.habitGoal != nil || outcome == .failed) && clock.day(task.day) > today {
             return .future
         }
         if task.habitGoal != nil && habitDays.contains(where: { $0.taskID == task.id && $0.day == today }) {
             return .habitRecorded
         }
+        if !task.hasDeadline && outcome == .failed && history.contains(where: {
+            $0.taskID == task.id && $0.outcome == .failed && clock.today($0.recordedAt) == today
+        }) {
+            return .alreadyFailed
+        }
         // A repeating task keeps its ID when it advances to the next occurrence.
         let alreadyCompleted = history.contains { event in
             event.outcome == .completed && event.taskID == task.id &&
-                (clock.day(event.deadline) == targetDeadline || clock.today(event.recordedAt) == today)
+                ((task.hasDeadline && event.hasDeadline && clock.day(event.deadline) == targetDeadline) ||
+                 clock.today(event.recordedAt) == today)
         }
         return alreadyCompleted ? .alreadyCompleted : nil
     }
@@ -326,8 +338,10 @@ extension FlowData {
         }
         record(task, outcome: outcome, now: now)
         if outcome == .failed {
-            tasks[i].originDay = task.originDay ?? task.day
-            tasks[i].day = clock.nextBusinessDay(after: max(task.day, clock.today(now)))
+            if task.hasDeadline {
+                tasks[i].originDay = task.originDay ?? task.day
+                tasks[i].day = clock.nextBusinessDay(after: max(task.day, clock.today(now)))
+            }
         } else if outcome == .completed, let next = clock.nextOccurrence(for: task, now: now) {
             tasks[i].repeatAnchorDay = task.repeatAnchorDay ?? clock.calendar.component(.day, from: task.day)
             tasks[i].repeatAnchorWeekday = task.repeatAnchorWeekday ?? clock.calendar.component(.weekday, from: task.day)
@@ -353,7 +367,8 @@ extension FlowData {
               !history[(index + 1)...].contains(where: { $0.taskID == event.taskID }),
               !history[..<index].contains(where: {
                   $0.taskID == event.taskID && $0.outcome == .completed &&
-                      (clock.day($0.deadline) == clock.day(event.deadline) || clock.today($0.recordedAt) == clock.today(now))
+                      (($0.hasDeadline && event.hasDeadline && clock.day($0.deadline) == clock.day(event.deadline)) ||
+                       clock.today($0.recordedAt) == clock.today(now))
               }),
               tasks.first(where: { $0.id == event.taskID }) == snapshot.next else { return nil }
         if snapshot.original.habitGoal != nil {
@@ -393,6 +408,7 @@ extension FlowData {
             if let planned = tasks[i].plannedDay, clock.day(planned) < today {
                 tasks[i].plannedDay = nil
             }
+            guard tasks[i].hasDeadline else { continue }
             if tasks[i].habitGoal != nil {
                 if tasks[i].day <= today {
                     if loggedToday.contains(tasks[i].id),

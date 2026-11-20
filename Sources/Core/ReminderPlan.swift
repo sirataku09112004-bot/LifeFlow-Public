@@ -48,7 +48,7 @@ enum FlowReminderPlan {
         guard limit > 0 else { return [] }
         let settings = settings.normalized()
         var plan: [FlowReminder] = []
-        for task in tasks where task.muteReminder != true && (!settings.favoritesOnly || task.favorite) {
+        for task in tasks where task.hasDeadline && task.muteReminder != true && (!settings.favoritesOnly || task.favorite) {
             for previous in [false, true] {
                 guard previous ? settings.onPreviousDay : settings.onDueDay,
                       let day = clock.calendar.date(byAdding: .day, value: previous ? -1 : 0, to: clock.day(task.day)),

@@ -2,21 +2,115 @@ import SwiftUI
 
 struct FlowHabitList: View {
     @EnvironmentObject private var store: FlowStore
+    @State private var adding: FlowTask?
+    @State private var now = Date()
+    private let timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
 
     var body: some View {
         List {
             let habits = store.data.tasks.filter { $0.habitGoal != nil }
-            if habits.isEmpty { Text("ToDoの追加時にカテゴリで「習慣」を選択できます。") }
+            if habits.isEmpty {
+                Text("＋から習慣を追加できます。")
+                    .foregroundStyle(.secondary)
+            }
             ForEach(habits) { task in
-                NavigationLink {
-                    FlowHabitDetail(taskID: task.id)
-                } label: {
-                    Label(task.title, systemImage: "circle.grid.2x2")
+                if let target = task.habitGoal {
+                    habitCard(task, target: target)
+                        .listRowBackground(FlowTheme.card)
                 }
             }
         }
         .flowScreen()
-        .navigationTitle("習慣の記録")
+        .navigationTitle("習慣")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    adding = FlowTask(title: "", day: store.clock.today(), category: "習慣", habitGoal: 3)
+                } label: {
+                    Image(systemName: "plus.circle.fill").accessibilityLabel("習慣を追加")
+                }
+                .disabled(!store.ready)
+            }
+        }
+        .sheet(item: $adding) { TaskEditor(task: $0).environmentObject(store) }
+        .onAppear { now = Date() }
+        .onReceive(timer) { now = $0 }
+    }
+
+    private func habitCard(_ task: FlowTask, target: Int) -> some View {
+        let calendar = FlowHabitCalendar(taskID: task.id, days: store.data.habitDays, now: now, clock: store.clock)
+        let week = calendar.interval(month: false, offset: 0)
+        let count = week.map { calendar.counts(in: $0).completed } ?? 0
+        let dayRecord = calendar.records[calendar.today]
+        return VStack(alignment: .leading, spacing: 8) {
+            NavigationLink {
+                FlowHabitDetail(taskID: task.id)
+            } label: {
+                Text(task.title).font(.headline)
+            }
+            HStack {
+                Text("今週 \(count)/\(target)回")
+                Spacer()
+                Text("連続 \(calendar.streak)日")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            HStack(spacing: 3) {
+                let days = (-13...0).compactMap { store.clock.calendar.date(byAdding: .day, value: $0, to: calendar.today) }
+                ForEach(days, id: \.self) { day in
+                    Circle()
+                        .fill(habitDotColor(calendar.records[day]))
+                        .overlay(Circle().strokeBorder(day == calendar.today ? FlowTheme.action : .clear, lineWidth: 1.5))
+                        .frame(height: 13)
+                        .frame(maxWidth: .infinity)
+                        .accessibilityLabel(store.clock.label(day) + "・" + (calendar.records[day]?.label ?? "未記録"))
+                }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("直近14日")
+            HStack {
+                if dayRecord == nil {
+                    Button {
+                        store.resolve(task, .completed)
+                    } label: {
+                        Label("今日の達成を記録", systemImage: "checkmark.circle")
+                            .frame(minHeight: 44)
+                    }.accessibilityIdentifier("habit-complete:" + task.title)
+                    Spacer()
+                    Menu {
+                        Button("失敗を記録") { store.resolve(task, .failed) }
+                        Button("休養を記録") { store.restHabit(task.id) }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .frame(minWidth: 44, minHeight: 44)
+                            .accessibilityLabel("今日の習慣の操作")
+                    }
+                } else if let dayRecord {
+                    Label("今日：\(dayRecord.label)", systemImage: dayRecord == .completed ? "checkmark.circle.fill" : "circle.fill")
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("habit-today:" + task.title)
+                    Spacer()
+                    if let event = store.data.completedToday(now: now, clock: store.clock).first(where: { $0.taskID == task.id }),
+                       store.data.canUndoCompletion(event.id, now: now, clock: store.clock) {
+                        Button("取り消す") { store.undoCompletion(event.id) }
+                            .frame(minHeight: 44)
+                    }
+                }
+            }
+            .buttonStyle(.borderless)
+            .disabled(!store.ready || task.day > calendar.today && dayRecord == nil)
+        }
+        .padding(.vertical, 6)
+    }
+}
+
+private func habitDotColor(_ record: FlowHabitOutcome?) -> Color {
+    switch record {
+    case .completed: return FlowTheme.accent
+    case .failed: return .red
+    case .rest: return .yellow
+    case nil: return FlowTheme.pale
     }
 }
 
@@ -118,7 +212,7 @@ struct FlowHabitDetail: View {
                     VStack(spacing: 4) {
                         Text(String(store.clock.calendar.component(.day, from: day)))
                             .font(.caption2).minimumScaleFactor(0.65).lineLimit(1)
-                        Circle().fill(dotColor(day)).overlay(Circle().strokeBorder(FlowTheme.ink.opacity(0.25)))
+                        Circle().fill(habitDotColor(calendar.records[day])).overlay(Circle().strokeBorder(FlowTheme.ink.opacity(0.25)))
                             .frame(width: 10, height: 10)
                     }.frame(maxWidth: .infinity, minHeight: 36)
                 }.buttonStyle(.borderless)
@@ -132,12 +226,4 @@ struct FlowHabitDetail: View {
         calendar.records[day]?.label ?? (day > calendar.today ? "予定" : "未記録")
     }
 
-    private func dotColor(_ day: Date) -> Color {
-        switch calendar.records[day] {
-        case .completed: return FlowTheme.accent
-        case .failed: return .red
-        case .rest: return .yellow
-        case nil: return .white
-        }
-    }
 }

@@ -1,6 +1,9 @@
 import Foundation
 
 struct FlowWidgetDay: Codable, Equatable {
+    static let smallTaskLimit = 5
+    static let mediumTaskLimit = 6
+
     struct Task: Codable, Equatable, Identifiable {
         let id: UUID
         let title: String
@@ -55,8 +58,8 @@ struct FlowWidgetSnapshot: Codable, Equatable {
                                     todayOrder: projected.todayOrder ?? [])
             let pending = list.today.filter { !doneIDs.contains($0.id) }
             let upcoming = showTitles ? Array(list.all.lazy
-                .filter { !$0.belongsToToday(day, clock: clock) }
-                .prefix(4)
+                .filter { $0.hasDeadline && !$0.belongsToToday(day, clock: clock) }
+                .prefix(FlowWidgetDay.mediumTaskLimit)
                 .map {
                     FlowWidgetDay.Task(id: $0.id, title: $0.title, occurrenceDay: $0.day,
                                        completionBlocked: projected.resolutionBlock(for: $0, now: date, clock: clock) != nil)
@@ -65,7 +68,7 @@ struct FlowWidgetSnapshot: Codable, Equatable {
                                              now: date, clock: clock, category: .all, favoritesOnly: false)
             entries.append(FlowWidgetDay(day: day, remaining: pending.count, percent: progress.percent,
                                          titlesVisible: showTitles,
-                                         tasks: showTitles ? pending.prefix(4).map {
+                                         tasks: showTitles ? pending.prefix(FlowWidgetDay.mediumTaskLimit).map {
                                              FlowWidgetDay.Task(id: $0.id, title: $0.title, occurrenceDay: $0.day)
                                          } : [],
                                          upcomingTasks: upcoming))

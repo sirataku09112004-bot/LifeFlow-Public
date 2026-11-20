@@ -35,23 +35,30 @@ final class PlanningUITests: XCTestCase {
     }
 
     @MainActor
-    func testCalendarMovesBetweenMonthsAndAddsToSelectedDate() {
+    func testHabitTabRecordsTodaysDot() {
         let app = launch()
-        app.tabBars.buttons["カレンダー"].tap()
-        let next = app.buttons["次の月"]
-        XCTAssertTrue(next.waitForExistence(timeout: 10))
-        next.tap()
-        app.buttons["選択した日にToDoを追加"].tap()
+        app.tabBars.buttons["習慣"].tap()
+        let complete = app.buttons["habit-complete:C Habit"]
+        XCTAssertTrue(complete.waitForExistence(timeout: 10))
+        complete.tap()
+        let recorded = app.descendants(matching: .any).matching(identifier: "habit-today:C Habit").firstMatch
+        XCTAssertTrue(recorded.waitForExistence(timeout: 8))
+        XCTAssertFalse(complete.exists)
+    }
+
+    @MainActor
+    func testCreateUndatedTaskKeepsDateTextInTitle() {
+        let app = launch()
+        app.buttons["ToDoを追加"].tap()
         let title = app.textFields.firstMatch
         XCTAssertTrue(title.waitForExistence(timeout: 8))
+        app.switches["期限なし"].tap()
         title.tap()
-        title.typeText("Calendar example")
+        title.typeText("Undated 2027/04/29")
         app.buttons["保存"].tap()
-        let example = app.buttons["calendar-task:Calendar example"]
-        XCTAssertTrue(example.waitForExistence(timeout: 10))
-        app.buttons["今日"].tap()
-        XCTAssertTrue(app.buttons["calendar-task:A Normal"].waitForExistence(timeout: 8))
-        XCTAssertFalse(example.exists)
+        let undated = app.buttons["complete:Undated 2027/04/29"]
+        reveal(undated, in: app)
+        XCTAssertTrue(app.staticTexts["期限なし"].firstMatch.exists)
     }
 
     @MainActor

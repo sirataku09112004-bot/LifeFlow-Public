@@ -108,9 +108,9 @@ final class PlanningTests: XCTestCase {
         XCTAssertEqual(FlowWidgetSnapshot(data: data, now: now, clock: clock, showTitles: true), snapshot)
     }
 
-    func testWidgetUpcomingShowsFourNearestDatesAndDecodesOldSnapshot() throws {
+    func testWidgetUpcomingShowsSixNearestDatesAndDecodesOldSnapshot() throws {
         let now = date("2026-11-16T20:00:00")
-        let scheduled = try (1...5).map { offset in
+        let scheduled = try (1...7).map { offset in
             let day = try XCTUnwrap(clock.calendar.date(byAdding: .day, value: offset, to: clock.today(now)))
             return FlowTask(title: "今後のタスク \(offset)", day: day)
         }
@@ -118,11 +118,41 @@ final class PlanningTests: XCTestCase {
         let snapshot = FlowWidgetSnapshot(data: data, now: now, clock: clock, showTitles: true)
         let today = try XCTUnwrap(snapshot.entry(now: now, clock: clock))
         XCTAssertEqual(today.remaining, 0)
-        XCTAssertEqual(today.upcomingTasks?.map(\.id), Array(scheduled.prefix(4)).map(\.id))
+        XCTAssertEqual(today.upcomingTasks?.map(\.id), Array(scheduled.prefix(6)).map(\.id))
         XCTAssertEqual(today.upcomingTasks?.first?.occurrenceDay, scheduled.first?.day)
         let old = FlowWidgetDay(day: today.day, remaining: 0, percent: 0, titlesVisible: true, tasks: [])
         let decoded = try JSONDecoder().decode(FlowWidgetDay.self, from: JSONEncoder().encode(old))
         XCTAssertNil(decoded.upcomingTasks)
+    }
+
+    func testUndatedTaskCanBePlannedAndCompletedWithoutAcquiringADeadline() throws {
+        let now = date("2026-11-16T20:00:00")
+        let anchor = date("2026-11-14T00:00:00")
+        let task = FlowTask(title: "期限なしのToDo", day: anchor, noDeadline: true)
+        var data = FlowData(tasks: [task])
+        XCTAssertTrue(data.rollover(now: now, clock: clock))
+        XCTAssertEqual(data.tasks, [task])
+        XCTAssertTrue(data.history.isEmpty)
+        func snapshot(_ data: FlowData) throws -> FlowWidgetDay {
+            try XCTUnwrap(FlowWidgetSnapshot(data: data, now: now, clock: clock, showTitles: true)
+                .entry(now: now, clock: clock))
+        }
+        XCTAssertTrue(try snapshot(data).tasks.isEmpty)
+        XCTAssertEqual(try snapshot(data).upcomingTasks, [])
+        XCTAssertNil(FlowWidgetTaskAction.complete(task.id, occurrenceDay: anchor, data: data, now: now, clock: clock))
+        XCTAssertTrue(data.setPlannedToday(task.id, enabled: true, now: now, clock: clock))
+        XCTAssertEqual(try snapshot(data).tasks.map(\.id), [task.id])
+        XCTAssertTrue(data.resolve(task.id, outcome: .failed, now: now, clock: clock))
+        XCTAssertFalse(data.resolve(task.id, outcome: .failed, now: now, clock: clock))
+        XCTAssertEqual(data.tasks.first?.day, anchor)
+        var completed = try XCTUnwrap(FlowWidgetTaskAction.complete(task.id, occurrenceDay: anchor, data: data,
+                                                                    now: now, clock: clock))
+        let record = try XCTUnwrap(completed.history.last)
+        XCTAssertFalse(record.hasDeadline)
+        XCTAssertTrue(completed.undoCompletion(record.id, now: now, clock: clock))
+        XCTAssertEqual(completed.tasks, data.tasks)
+        XCTAssertTrue(completed.changeDeadline(task.id, to: clock.today(now), clock: clock))
+        XCTAssertEqual(completed.tasks.first?.hasDeadline, true)
     }
 
     func testWidgetRoutingAndAltStoreGroupNames() {

@@ -73,17 +73,19 @@ private struct TodayWidgetView: View {
 
     var body: some View {
         if #available(iOS 17.0, *) {
-            content.padding(8).containerBackground(canvas, for: .widget)
+            content.padding(.horizontal, 7).padding(.vertical, 6)
+                .containerBackground(canvas, for: .widget)
         } else {
-            content.padding(8).background(canvas)
+            content.padding(.horizontal, 7).padding(.vertical, 6).background(canvas)
         }
     }
 
     private var content: some View {
         GeometryReader { geometry in
-            let rowHeight = min(26, max(14, floor((geometry.size.height - 38) / 4)))
+            let headerHeight: CGFloat = family == .systemSmall ? 30 : 36
+            let rowHeight = min(24, max(13, floor((geometry.size.height - headerHeight) / CGFloat(taskLimit))))
             if family == .systemMedium {
-                HStack(alignment: .top, spacing: 6) {
+                HStack(alignment: .top, spacing: 4) {
                     todayColumn(rowHeight: rowHeight)
                     Rectangle()
                         .fill(ink.opacity(0.16))
@@ -98,8 +100,12 @@ private struct TodayWidgetView: View {
         .widgetURL(FlowWidgetRoute.url())
     }
 
+    private var taskLimit: Int {
+        family == .systemSmall ? FlowWidgetDay.smallTaskLimit : FlowWidgetDay.mediumTaskLimit
+    }
+
     private func todayColumn(rowHeight: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 1) {
             Text("今日のToDo")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(ink)
@@ -110,10 +116,11 @@ private struct TodayWidgetView: View {
                 if family != .systemSmall {
                     ProgressView(value: Double(day.percent), total: 100)
                         .tint(accent)
+                        .frame(height: 4)
                         .accessibilityLabel("今日の達成率 \(day.percent)%")
                 }
                 if day.titlesVisible {
-                    let visibleTasks = Array(day.tasks.prefix(4))
+                    let visibleTasks = Array(day.tasks.prefix(taskLimit))
                     if visibleTasks.isEmpty {
                         Text(day.remaining == 0 ? "今日のタスクはありません" : "今日のタスクを読み込み中")
                             .font(.caption2)
@@ -139,13 +146,13 @@ private struct TodayWidgetView: View {
     }
 
     private func upcomingColumn(rowHeight: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 1) {
             Text("今後の予定")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(ink)
             if let day = entry.day, day.titlesVisible {
                 if let tasks = day.upcomingTasks, !tasks.isEmpty {
-                    ForEach(tasks) { task in
+                    ForEach(Array(tasks.prefix(taskLimit))) { task in
                         upcomingRow(task, displayedDay: day.day, height: rowHeight)
                     }
                 } else {
@@ -251,7 +258,7 @@ private struct TodayWidgetView: View {
 
     private func circle(_ height: CGFloat, width: CGFloat) -> some View {
         Image(systemName: "circle")
-            .font(.system(size: 14, weight: .medium))
+            .font(.system(size: 13, weight: .medium))
             .foregroundStyle(renderingMode == .fullColor ? accent : ink)
             .frame(width: width, height: height)
             .contentShape(Rectangle())

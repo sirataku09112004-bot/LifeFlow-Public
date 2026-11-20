@@ -19,11 +19,18 @@ struct TaskScheduleSheet: View {
                     }
                 }
                 Section("締切日を変更") {
-                    Text(store.clock.label(task.deadline)).foregroundStyle(.secondary)
+                    Text(task.hasDeadline ? store.clock.label(task.deadline) : "期限なし")
+                        .foregroundStyle(.secondary)
                     Button("今日") { changeDeadline(plus: 0) }
                     Button("明日") { changeDeadline(plus: 1) }
                     Button("来週（7日後）") { changeDeadline(plus: 7) }
-                    Button("日付指定") { date = task.deadline; custom = true }
+                    Button("日付指定") { date = task.hasDeadline ? task.deadline : today; custom = true }
+                    if task.hasDeadline && task.repeatRule == nil {
+                        Button("期限なしにする") {
+                            store.removeDeadline(task.id)
+                            dismiss()
+                        }
+                    }
                     if custom {
                         DatePicker("締切日", selection: $date, displayedComponents: .date)
                         Button("指定した締切日に変更") {

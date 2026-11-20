@@ -12,7 +12,7 @@ extension FlowTask {
     }
 
     func belongsToToday(_ today: Date, clock: FlowClock) -> Bool {
-        clock.day(day) <= today || isPlannedToday(today, clock: clock)
+        (hasDeadline && clock.day(day) <= today) || isPlannedToday(today, clock: clock)
     }
 }
 
@@ -26,9 +26,19 @@ extension FlowData {
     mutating func changeDeadline(_ id: UUID, to date: Date, clock: FlowClock) -> Bool {
         guard let index = tasks.firstIndex(where: { $0.id == id && $0.habitGoal == nil }) else { return false }
         tasks[index].day = clock.day(date)
+        tasks[index].noDeadline = nil
         tasks[index].originDay = nil
         tasks[index].repeatAnchorDay = tasks[index].repeatRule.map { _ in clock.calendar.component(.day, from: date) }
         tasks[index].repeatAnchorWeekday = tasks[index].repeatRule.map { _ in clock.calendar.component(.weekday, from: date) }
+        return true
+    }
+
+    mutating func removeDeadline(_ id: UUID) -> Bool {
+        guard let index = tasks.firstIndex(where: { $0.id == id && $0.habitGoal == nil && $0.repeatRule == nil }) else {
+            return false
+        }
+        tasks[index].noDeadline = true
+        tasks[index].originDay = nil
         return true
     }
 
@@ -100,7 +110,7 @@ struct FlowTodayProgress {
                 lastFailureOrDeletion[event.taskID] = event
             }
         }
-        for event in lastFailureOrDeletion.values where event.outcome == .failed {
+        for event in lastFailureOrDeletion.values where event.outcome == .failed && event.hasDeadline {
             if FlowCategories.matches(event.category, filter: category) && (!favoritesOnly || event.favorite == true) {
                 eligible.insert(event.taskID)
             }

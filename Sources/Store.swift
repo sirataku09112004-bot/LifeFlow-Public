@@ -357,6 +357,11 @@ struct BackupDocument: FileDocument {
         commit(next)
     }
 
+    func removeDeadline(_ id: UUID) {
+        var next = data
+        if next.removeDeadline(id) { commit(next) }
+    }
+
     func reorderToday(_ visible: [UUID], to reordered: [UUID]) {
         var next = data
         if next.reorderToday(visible, to: reordered, now: Date(), clock: clock) { commit(next) }

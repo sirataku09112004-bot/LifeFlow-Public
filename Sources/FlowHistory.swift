@@ -24,8 +24,12 @@ struct FlowHistory: View {
             ForEach(history) { event in
                 VStack(alignment: .leading, spacing: 6) {
                     Label(event.title, systemImage: icon(event.outcome)).font(.headline)
-                    Text(label(event.outcome) + (event.outcome == .completed ? "・期限 " : "・対象 ")
-                         + store.clock.label(event.outcome == .completed ? event.deadline : event.day)).font(.caption)
+                    if event.hasDeadline {
+                        Text(label(event.outcome) + (event.outcome == .completed ? "・期限 " : "・対象 ")
+                             + store.clock.label(event.outcome == .completed ? event.deadline : event.day)).font(.caption)
+                    } else {
+                        Text(label(event.outcome) + "・期限なし").font(.caption)
+                    }
                     if let category = event.category { Label(category, systemImage: "folder").font(.caption) }
                     if let items = event.subtasks, !items.isEmpty {
                         DisclosureGroup("サブタスク \(items.filter(\.isDone).count)/\(items.count)") {
