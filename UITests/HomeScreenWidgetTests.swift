@@ -53,8 +53,10 @@ final class HomeScreenWidgetTests: XCTestCase {
         tap(home.buttons["Done"])
 
         let tile = home.icons.matching(NSPredicate(format: "label == %@ AND value == %@", "LifeFlow", "Widget")).firstMatch
-        XCTAssertTrue(tile.staticTexts["やることリスト"].waitForExistence(timeout: 25))
+        let heading = tile.staticTexts["やることリスト"]
+        XCTAssertTrue(heading.waitForExistence(timeout: 25))
         XCTAssertLessThan(tile.frame.width, tile.frame.height * 1.5)
+        XCTAssertEqual(heading.frame.midX, tile.frame.midX, accuracy: 3)
         for name in undatedNames.prefix(7) {
             let row = tile.staticTexts[name]
             XCTAssertTrue(row.waitForExistence(timeout: 25))
@@ -125,6 +127,8 @@ final class HomeScreenWidgetTests: XCTestCase {
         XCTAssertTrue(upcoming.waitForExistence(timeout: 20))
         XCTAssertLessThan(today.frame.midX, upcoming.frame.midX)
         XCTAssertEqual(today.frame.midY, upcoming.frame.midY, accuracy: 2)
+        XCTAssertEqual(today.frame.midX, tile.frame.minX + tile.frame.width / 4, accuracy: 12)
+        XCTAssertEqual(upcoming.frame.midX, tile.frame.maxX - tile.frame.width / 4, accuracy: 12)
         let taskLabel = tile.descendants(matching: .any).matching(identifier: "widget-upcoming-task:" + taskName).firstMatch
         XCTAssertTrue(taskLabel.waitForExistence(timeout: 25))
         let complete = tile.descendants(matching: .any).matching(identifier: "widget-complete-upcoming-task").firstMatch

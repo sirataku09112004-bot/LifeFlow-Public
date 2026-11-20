@@ -109,10 +109,20 @@ private struct TodayWidgetView: View {
         return family == .systemSmall ? FlowWidgetDay.smallTaskLimit : FlowWidgetDay.mediumTaskLimit
     }
 
+    private func columnTitle(_ title: LocalizedStringKey) -> some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 0)
+            Text(title)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(ink)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 0)
+        }
+    }
+
     private func undatedColumn(rowHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text("やることリスト")
-                .font(.caption.weight(.bold))
+            columnTitle("やることリスト")
             if let day = entry.day, let undated = day.undated {
                 if undated.remaining == 0 {
                     Text("期限なしのタスクはありません")
@@ -137,9 +147,7 @@ private struct TodayWidgetView: View {
 
     private func todayColumn(rowHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text("今日のToDo")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(ink)
+            columnTitle("今日のToDo")
             if let day = entry.day {
                 Text("残り \(day.remaining)件 · \(day.percent)%達成")
                     .font(.system(size: 9))
@@ -178,9 +186,7 @@ private struct TodayWidgetView: View {
 
     private func upcomingColumn(rowHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text("今後の予定")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(ink)
+            columnTitle("今後の予定")
             if let day = entry.day, day.titlesVisible {
                 if let tasks = day.upcomingTasks, !tasks.isEmpty {
                     ForEach(Array(tasks.prefix(taskLimit))) { task in
